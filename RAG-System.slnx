@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="RAG.API/RAG.API.csproj" Id="0b5f868e-558c-4bde-a9da-5e418812f812" />
+  <Project Path="RAG.Application/RAG.Application.csproj" Id="e813eea6-1aca-4b10-839e-7dc185c9b353" />
+  <Project Path="RAG.Domain/RAG.Domain.csproj" Id="f3e764e9-1da4-463f-9251-0e22ba60c3da" />
+  <Project Path="RAG.Infrastructure/RAG.Infrastructure.csproj" Id="cffbb698-8835-4de1-94b5-9da0d5d2533d" />
+</Solution>
