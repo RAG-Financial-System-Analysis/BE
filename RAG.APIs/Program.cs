@@ -2,9 +2,9 @@
 using Amazon.CognitoIdentityProvider;
 using Microsoft.EntityFrameworkCore;
 using RAG.APIs.Infrastructure;
-using RAG.Application.Interfaces;
+//using RAG.Application.Interfaces;
 using RAG.Infrastructure.AWS;
-using RAG.Infrastructure.Database;
+//using RAG.Infrastructure.Database;
 
 var builder = WebApplication.CreateBuilder(args);
 

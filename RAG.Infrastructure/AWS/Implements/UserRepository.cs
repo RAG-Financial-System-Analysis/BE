@@ -1,6 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using RAG.Application.Interfaces;
-using RAG.Domain.Entities;
 using RAG.Infrastructure.Database;
 using System;
 using System.Collections.Generic;
@@ -8,7 +7,7 @@ using System.Text;
 
 namespace RAG.Infrastructure.AWS.Implements
 {
-     public class UserRepository : IUserRepository
+    public class UserRepository : IUserRepository
     {
         private readonly ApplicationDbContext _context;
         public UserRepository(ApplicationDbContext context) => _context = context;

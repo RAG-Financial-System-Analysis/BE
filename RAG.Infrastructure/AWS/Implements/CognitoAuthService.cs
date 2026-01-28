@@ -4,8 +4,12 @@ using Amazon.Runtime.Internal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using RAG.Application.Interfaces;
+
+//using RAG.Application.Interfaces;
 using RAG.Domain.DTOs.Auth;
-using RAG.Domain.Entities;
+using RAG.Domain.Enum;
+
+//using RAG.Domain.Entities;
 using RAG.Infrastructure.AWS.Interface;
 using System;
 using System.Collections.Generic;
@@ -16,18 +20,22 @@ namespace RAG.Infrastructure.AWS.Implements
     public class CognitoAuthService : ICognitoAuthService
     {
         private readonly IAmazonCognitoIdentityProvider _cognitoClient;
+        private readonly IRoleRepository _roleRepository;
         private readonly IUserRepository _userRepository;
         private readonly string _clientId;
         private readonly string _userPoolId;    
 
         public CognitoAuthService(IAmazonCognitoIdentityProvider cognitoClient, 
                                   IConfiguration configuration,
-                                  IUserRepository userRepository)
+                                  IUserRepository userRepository,
+                                  IRoleRepository roleRepository
+            )
         {
             _cognitoClient = cognitoClient;
             _clientId = configuration["AWS:ClientId"];
             _userPoolId = configuration["AWS:UserPoolId"];
             _userRepository = userRepository;
+            _roleRepository = roleRepository;
         }
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
@@ -55,6 +63,12 @@ namespace RAG.Infrastructure.AWS.Implements
 
         public async Task<string> RegisterAsync(RegisterRequest item)
         {
+            var roleMember = await _roleRepository.GetByNameAsync(SystemRoles.Member);
+
+            if (roleMember == null)
+            {
+                throw new Exception($"Lỗi Critical: Hệ thống chưa có Role '{SystemRoles.Member}'. Vui lòng chạy lệnh SQL insert Role.");
+            }
             var signUpRequest = new SignUpRequest
             {
                 ClientId = _clientId,
@@ -64,25 +78,27 @@ namespace RAG.Infrastructure.AWS.Implements
         {
             new AttributeType { Name = "email", Value = item.Email },
             new AttributeType { Name = "name", Value = item.FullName }
-
         }
             };
-
             var response = await _cognitoClient.SignUpAsync(signUpRequest);
-            var userSub = response.UserSub; 
-            
-            var newUser = new User
+            var userSub = response.UserSub;
+            try
             {
-                Id = Guid.NewGuid(),     
-                CognitoSub = userSub,     
+                var newUser = new User
+                {
+                    Id = Guid.NewGuid(),
+                    CognitoSub = userSub,
+                    Email = item.Email,
+                    FullName = item.FullName,
+                    RoleId = roleMember.Id
+                };
 
-                Email = item.Email,
-                FullName = item.FullName,
-
-                Roleid = Guid.Parse("99999999-9999-9999-9999-999999999999")
-            };
-
-            await _userRepository.AddAsync(newUser);
+                await _userRepository.AddAsync(newUser);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Đăng ký AWS thành công nhưng không thể lưu vào Database: {ex.Message}");
+            }
 
             return userSub;
         }

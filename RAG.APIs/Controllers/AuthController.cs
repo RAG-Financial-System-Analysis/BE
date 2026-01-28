@@ -26,7 +26,7 @@ namespace RAG.APIs.Controllers
 
                 return Ok(new
                 {
-                    Message = "Đăng ký thành công! Nam nhớ vào AWS Console Confirm user nhé.",
+                    Message = "Đăng ký thành công! Nhớ vào AWS Console Confirm user nhé.",
                     UserId = userSub
                 });
             }

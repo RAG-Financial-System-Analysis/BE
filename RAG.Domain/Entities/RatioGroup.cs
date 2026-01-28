@@ -6,17 +6,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace RAG.Infrastructure;
 
-[Table("roles")]
-[Index("Name", Name = "roles_name_key", IsUnique = true)]
-public partial class Role
+[Table("Ratio_Group")]
+public partial class RatioGroup
 {
     [Key]
-    [Column("id")]
     public Guid Id { get; set; }
 
-    [Column("name")]
-    [StringLength(50)]
     public string Name { get; set; } = null!;
 
-    public virtual ICollection<User> Users { get; set; } = new List<User>();
+    [InverseProperty("Group")]
+    public virtual ICollection<RatioDefinition> RatioDefinitions { get; set; } = new List<RatioDefinition>();
 }

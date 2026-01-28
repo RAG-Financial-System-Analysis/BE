@@ -1,9 +1,12 @@
 ﻿using Amazon.CognitoIdentityProvider;
 using Microsoft.EntityFrameworkCore;
 using RAG.Application.Interfaces;
+
+//using RAG.Application.Interfaces;
 using RAG.Infrastructure.AWS.Implements;
 using RAG.Infrastructure.AWS.Interface;
 using RAG.Infrastructure.Database;
+//using RAG.Infrastructure.Database;
 
 namespace RAG.APIs.Infrastructure
 {
@@ -15,7 +18,6 @@ namespace RAG.APIs.Infrastructure
             var connectionString = configuration.GetConnectionString("DefaultConnection");
             services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseNpgsql(connectionString));
-
             // 2. Cấu hình AWS
             // --- 2. Cấu hình AWS (SỬA LẠI ĐOẠN NÀY) ---
             var awsOptions = configuration.GetAWSOptions();
@@ -38,6 +40,7 @@ namespace RAG.APIs.Infrastructure
             // 3. Đăng ký các Repository và Service
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<ICognitoAuthService, CognitoAuthService>();
+            services.AddScoped<IRoleRepository, RoleRepository>();
 
             return services;
         }

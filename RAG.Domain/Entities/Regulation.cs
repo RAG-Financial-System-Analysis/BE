@@ -6,17 +6,19 @@ using Microsoft.EntityFrameworkCore;
 
 namespace RAG.Infrastructure;
 
-[Table("roles")]
-[Index("Name", Name = "roles_name_key", IsUnique = true)]
-public partial class Role
+[Table("Regulation")]
+public partial class Regulation
 {
     [Key]
-    [Column("id")]
     public Guid Id { get; set; }
 
-    [Column("name")]
-    [StringLength(50)]
+    public string Code { get; set; } = null!;
+
     public string Name { get; set; } = null!;
 
-    public virtual ICollection<User> Users { get; set; } = new List<User>();
+    public string? Description { get; set; }
+
+    [ForeignKey("RegulationId")]
+    [InverseProperty("Regulations")]
+    public virtual ICollection<Source> Sources { get; set; } = new List<Source>();
 }

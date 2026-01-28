@@ -5,9 +5,8 @@ using System.Text;
 
 namespace RAG.Application.Interfaces
 {
-    public interface IUserRepository
+    public interface IRoleRepository : IRepository<Role>
     {
-        Task AddAsync(User user);
-        Task<User?> GetByIdAsync(string id);
+        Task<Role?> GetByNameAsync(string roleName);
     }
 }
