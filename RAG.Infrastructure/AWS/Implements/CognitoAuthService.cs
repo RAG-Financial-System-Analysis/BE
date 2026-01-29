@@ -90,7 +90,8 @@ namespace RAG.Infrastructure.AWS.Implements
                     CognitoSub = userSub,
                     Email = item.Email,
                     FullName = item.FullName,
-                    RoleId = roleMember.Id
+                    RoleId = roleMember.Id,
+                    CreatedAt = DateTime.UtcNow.ToLocalTime()
                 };
 
                 await _userRepository.AddAsync(newUser);
