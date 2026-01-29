@@ -11,6 +11,7 @@ using RAG.Domain.Enum;
 
 //using RAG.Domain.Entities;
 using RAG.Infrastructure.AWS.Interface;
+using RAG.Infrastructure.Database;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -23,12 +24,14 @@ namespace RAG.Infrastructure.AWS.Implements
         private readonly IRoleRepository _roleRepository;
         private readonly IUserRepository _userRepository;
         private readonly string _clientId;
-        private readonly string _userPoolId;    
+        private readonly string _userPoolId;
+        private readonly ApplicationDbContext _context;
 
         public CognitoAuthService(IAmazonCognitoIdentityProvider cognitoClient, 
                                   IConfiguration configuration,
                                   IUserRepository userRepository,
-                                  IRoleRepository roleRepository
+                                  IRoleRepository roleRepository,
+                                  ApplicationDbContext context
             )
         {
             _cognitoClient = cognitoClient;
@@ -36,6 +39,7 @@ namespace RAG.Infrastructure.AWS.Implements
             _userPoolId = configuration["AWS:UserPoolId"];
             _userRepository = userRepository;
             _roleRepository = roleRepository;
+            _context = context;
         }
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
@@ -43,7 +47,7 @@ namespace RAG.Infrastructure.AWS.Implements
             var authRequest = new InitiateAuthRequest
             {
                 ClientId = _clientId,
-                AuthFlow = AuthFlowType.USER_PASSWORD_AUTH,//đăng nhập với mk + email
+                AuthFlow = AuthFlowType.USER_PASSWORD_AUTH,
                 AuthParameters = new Dictionary<string, string>
                 {
                    { "USERNAME", request.Email },
@@ -53,11 +57,27 @@ namespace RAG.Infrastructure.AWS.Implements
 
             var response = await _cognitoClient.InitiateAuthAsync(authRequest);
 
+            var userInDb = await _context.Users
+                                 .Include(u => u.Role)
+                                 .AsNoTracking()
+                                 .FirstOrDefaultAsync(u => u.Email == request.Email);
+
+            string roleName = "Member"; 
+            string fullName = "User";
+
+            if (userInDb != null)
+            {
+                roleName = userInDb.Role?.Name ?? "Member";
+                fullName = userInDb.FullName;
+            }
+
             return new AuthResponse
             {
                 AccessToken = response.AuthenticationResult.AccessToken,
                 IdToken = response.AuthenticationResult.IdToken,
-                RefreshToken = response.AuthenticationResult.RefreshToken
+                RefreshToken = response.AuthenticationResult.RefreshToken,
+                Role = roleName,
+                FullName = fullName
             };
         }
 

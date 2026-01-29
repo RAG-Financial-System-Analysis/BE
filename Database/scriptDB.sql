@@ -1,4 +1,5 @@
 
+
 UPDATE "Roles" 
 SET "Name" = TRIM("Name"); -- Lệnh này cắt bỏ khoảng trắng đầu đuôi
 -- 2. Tạo bảng ROLES (Bảng gốc)
@@ -28,8 +29,8 @@ VALUES ('88888888-8888-8888-8888-888888888888', 'Member')
 ON CONFLICT ("Id") DO NOTHING;
 
 SELECT * FROM "Roles";
-
--- 3. Tạo bảng USERS (Đã bỏ Password, thêm CognitoSub)
+SELECT * FROM "Users";
+-- 3. Tạo bảng USERS 
 CREATE TABLE "Users" (
     "Id" uuid NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
     "RoleId" uuid NOT NULL,

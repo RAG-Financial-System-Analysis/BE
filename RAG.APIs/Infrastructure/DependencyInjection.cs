@@ -1,11 +1,15 @@
 ﻿using Amazon.CognitoIdentityProvider;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
 using RAG.Application.Interfaces;
-
-//using RAG.Application.Interfaces;
+using Microsoft.AspNetCore.Authentication;
 using RAG.Infrastructure.AWS.Implements;
 using RAG.Infrastructure.AWS.Interface;
 using RAG.Infrastructure.Database;
+using RAG.Infrastructure.Security;
+using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 //using RAG.Infrastructure.Database;
 
 namespace RAG.APIs.Infrastructure
@@ -41,6 +45,30 @@ namespace RAG.APIs.Infrastructure
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<ICognitoAuthService, CognitoAuthService>();
             services.AddScoped<IRoleRepository, RoleRepository>();
+            services.AddTransient<IClaimsTransformation, RoleClaimsTransformation>();
+            //
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+.AddJwtBearer(options =>
+{
+    var authorityUrl = configuration["AWS:Authority"];
+    Console.WriteLine("========================================");
+    Console.WriteLine($"🔍 GIÁ TRỊ CODE ĐỌC ĐƯỢC: '{authorityUrl}'");
+    Console.WriteLine("========================================");
+    options.Authority = authorityUrl;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = authorityUrl,
+        ValidateAudience = false,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true
+    };
+});
+
 
             return services;
         }
