@@ -68,8 +68,12 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger(); 
-    app.UseSwaggerUI(); 
+    app.UseSwaggerUI(c =>
+    {
+        c.InjectStylesheet("/custom-swagger.css");
+    }); 
 }
+app.UseStaticFiles();
 app.UseCors("AllowAll");
 app.UseHttpsRedirection();
 

@@ -10,5 +10,6 @@ namespace RAG.Infrastructure.AWS.Interface
         Task<string> RegisterAsync(RegisterRequest request);
         Task<AuthResponse> LoginAsync(LoginRequest request);
         Task<bool> VerifyEmailAsync(VerifyRequest request);
+        Task<bool> LogoutAsync(string accessToken);
     }
 }

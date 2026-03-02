@@ -1,4 +1,5 @@
 ﻿using Amazon.CognitoIdentityProvider.Model;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RAG.Domain.DTOs.Auth;
 using RAG.Infrastructure.AWS.Interface;
@@ -77,6 +78,36 @@ namespace RAG.APIs.Controllers
             catch (Exception ex)
             {
                 return BadRequest(new { Message = "Lỗi xác thực: " + ex.Message });
+            }
+        }
+
+        [Authorize]
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout()
+        {
+            try
+            {
+                var accessToken = Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+                if (string.IsNullOrEmpty(accessToken))
+                {
+                    return BadRequest(new { Message = "Access Token bị thiếu." });
+                }
+
+                bool isSuccess = await _authService.LogoutAsync(accessToken);
+
+                if (isSuccess)
+                {
+                    return Ok(new
+                    {
+                        Message = "Logged out successfully from all devices"
+                    });
+                }
+                
+                return BadRequest(new { Message = "Đăng xuất thất bại do lỗi từ AWS Cognito." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = "Lỗi đăng xuất: " + ex.Message });
             }
         }
     }

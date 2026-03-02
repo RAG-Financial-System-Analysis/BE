@@ -85,11 +85,11 @@ namespace RAG.Infrastructure.AWS.Implements
 
         public async Task<string> RegisterAsync(RegisterRequest item)
         {
-            var roleMember = await _roleRepository.GetByNameAsync(SystemRoles.Member);
+            var roleMember = await _roleRepository.GetByNameAsync(SystemRoles.Analyst);
 
             if (roleMember == null)
             {
-                throw new Exception($"Lỗi Critical: Hệ thống chưa có Role '{SystemRoles.Member}'. Vui lòng chạy lệnh SQL insert Role.");
+                throw new Exception($"Lỗi Critical: Hệ thống chưa có Role '{SystemRoles.Analyst}'. Vui lòng chạy lệnh SQL insert Role.");
             }
             var signUpRequest = new SignUpRequest
             {
@@ -137,6 +137,17 @@ namespace RAG.Infrastructure.AWS.Implements
 
             var response = await _cognitoClient.ConfirmSignUpAsync(confirmRequest);
 
+            return response.HttpStatusCode == System.Net.HttpStatusCode.OK;
+        }
+
+        public async Task<bool> LogoutAsync(string accessToken)
+        {
+            var signOutRequest = new GlobalSignOutRequest
+            {
+                AccessToken = accessToken
+            };
+
+            var response = await _cognitoClient.GlobalSignOutAsync(signOutRequest);
             return response.HttpStatusCode == System.Net.HttpStatusCode.OK;
         }
     }

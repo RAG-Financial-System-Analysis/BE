@@ -1,0 +1,290 @@
+/* ===== CYBERPUNK SWAGGER THEME (FINAL V3 - FIX TEXT VISIBILITY) ===== */
+
+:root {
+    --bg-main: #0f0f1a; /* Nền chính siêu tối */
+    --bg-card: #18182a; /* Nền khối card */
+    --bg-hover: #252538; /* Nền khi hover hoặc tiêu đề phụ */
+    --neon-blue: #00f5ff;
+    --neon-pink: #ff00c8;
+    --neon-green: #00ff9f;
+    --text-main: #e0e0ff; /* Chữ chính sáng (trắng xanh) */
+    --text-gray: #aabccd; /* Đã chỉnh sáng hơn bản cũ để dễ đọc */
+    --border-glow: rgba(0, 245, 255, 0.4);
+}
+
+/* =================================================================
+   1. CẤU TRÚC CHUNG & NỀN
+   ================================================================= */
+.swagger-ui {
+    background: linear-gradient(135deg, #0f0f1a, #141427);
+    color: var(--text-main);
+    font-family: "Segoe UI", sans-serif;
+}
+
+    /* Fix phần trắng phía trên header */
+    .swagger-ui .swagger-container,
+    .swagger-ui .scheme-container {
+        background: var(--bg-main) !important;
+        box-shadow: none;
+        border-bottom: 1px solid var(--neon-blue);
+    }
+
+    /* Topbar đen tuyền */
+    .swagger-ui .topbar {
+        background: #000000;
+        border-bottom: 2px solid var(--neon-pink);
+    }
+
+    /* =================================================================
+   2. TEXT & TIÊU ĐỀ
+   ================================================================= */
+    .swagger-ui .info .title {
+        color: var(--neon-blue);
+        text-shadow: 0 0 8px var(--neon-blue);
+    }
+
+    .swagger-ui .info p,
+    .swagger-ui .info li {
+        color: var(--text-gray);
+    }
+
+    /* Tên Controller (Tags) */
+    .swagger-ui .opblock-tag {
+        color: var(--text-gray);
+        border-bottom: 1px solid var(--bg-hover);
+    }
+
+        .swagger-ui .opblock-tag:hover {
+            color: var(--text-main);
+        }
+
+        .swagger-ui .opblock-tag small {
+            color: #778899; /* Mô tả controller */
+        }
+
+    /* =================================================================
+   3. OPERATION BLOCK (API ENDPOINT)
+   ================================================================= */
+    .swagger-ui .opblock {
+        background: var(--bg-card);
+        border: 1px solid var(--border-glow);
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0,245,255,0.1);
+        transition: all 0.2s ease-in-out;
+    }
+
+        .swagger-ui .opblock:hover {
+            background: var(--bg-hover);
+            box-shadow: 0 0 15px rgba(255,0,200,0.3);
+        }
+
+        .swagger-ui .opblock .opblock-summary-description {
+            color: var(--text-gray);
+        }
+
+        /* HTTP Methods Colors */
+        .swagger-ui .opblock.opblock-get .opblock-summary-method {
+            background: var(--neon-blue);
+            color: #000;
+            box-shadow: 0 0 8px var(--neon-blue);
+        }
+
+        .swagger-ui .opblock.opblock-post .opblock-summary-method {
+            background: var(--neon-green);
+            color: #000;
+            box-shadow: 0 0 8px var(--neon-green);
+        }
+
+        .swagger-ui .opblock.opblock-put .opblock-summary-method {
+            background: var(--neon-pink);
+            color: #000;
+            box-shadow: 0 0 8px var(--neon-pink);
+        }
+
+        .swagger-ui .opblock.opblock-delete .opblock-summary-method {
+            background: #ff3b3b;
+            color: #000;
+            box-shadow: 0 0 8px #ff3b3b;
+        }
+
+        .swagger-ui .opblock.opblock-patch .opblock-summary-method {
+            background: #ffaa00;
+            color: #000;
+            box-shadow: 0 0 8px #ffaa00;
+        }
+
+        /* =================================================================
+   4. FIX NỀN TRẮNG & TIÊU ĐỀ KHU VỰC (PARAMETERS, BODY...)
+   ================================================================= */
+        .swagger-ui .opblock .opblock-section-header {
+            background-color: var(--bg-hover) !important;
+            border-bottom: 1px solid #333;
+        }
+
+            /* Tiêu đề chính (Parameters, Responses, Request Body) */
+            .swagger-ui .opblock .opblock-section-header h4 {
+                color: var(--text-main) !important; /* Đổi sang sáng để dễ đọc */
+                font-weight: bold;
+            }
+
+    /* Nút Try it out */
+    .swagger-ui .try-out__btn {
+        color: var(--text-main);
+    }
+
+    /* Tabs (Schema/Example) */
+    .swagger-ui .tab li {
+        color: var(--text-gray) !important;
+    }
+
+        .swagger-ui .tab li.active {
+            color: var(--neon-blue) !important;
+            border-bottom: 2px solid var(--neon-blue);
+        }
+
+    /* =================================================================
+   5. FIX VISIBILITY CHO PHẦN RESPONSES & CURL (QUAN TRỌNG !!!)
+   ================================================================= */
+
+    /* Tiêu đề cột bảng (Code, Description, Links) */
+    .swagger-ui table thead tr th,
+    .swagger-ui .responses-table thead tr th {
+        color: var(--text-main) !important; /* Màu sáng */
+        border-bottom: 1px solid #444;
+        font-size: 14px;
+    }
+
+    /* Nội dung trong bảng không bị tối */
+    .swagger-ui table tbody tr td {
+        color: var(--text-gray);
+        border-bottom: 1px solid #333;
+    }
+
+    /* Tiêu đề con: Response body, Response headers, Curl, Server response */
+    .swagger-ui .opblock-description-wrapper h4,
+    .swagger-ui .responses-inner h4,
+    .swagger-ui .responses-inner h5 {
+        color: var(--text-main) !important; /* Đổi thành màu sáng */
+        opacity: 0.9;
+    }
+
+    /* Mô tả mã lỗi (200, 400...) */
+    .swagger-ui .response-col_status {
+        color: var(--neon-green); /* Code 200 màu xanh lá cho đẹp */
+    }
+
+    .swagger-ui .response-col_description {
+        color: var(--text-gray);
+    }
+
+    /* Khung Curl & Code */
+    .swagger-ui .highlight-code {
+        background-color: #0a0a12 !important;
+        border: 1px solid var(--border-glow);
+    }
+
+    .swagger-ui .microlight {
+        color: var(--text-main) !important; /* Code trong khung hiển thị rõ */
+    }
+
+    /* =================================================================
+   6. FIX AUTHORIZE MODAL (POPUP LOGIN)
+   ================================================================= */
+    .swagger-ui .dialog-ux .modal-ux {
+        background: var(--bg-card) !important;
+        border: 1px solid var(--neon-blue);
+        box-shadow: 0 0 20px rgba(0, 245, 255, 0.2);
+        color: var(--text-main);
+    }
+
+    .swagger-ui .dialog-ux .modal-ux-header {
+        background: var(--bg-main) !important;
+        border-bottom: 1px solid var(--neon-pink);
+    }
+
+        .swagger-ui .dialog-ux .modal-ux-header h3 {
+            color: var(--neon-blue) !important;
+        }
+
+        .swagger-ui .dialog-ux .modal-ux-header .close-modal {
+            fill: var(--neon-pink) !important;
+        }
+
+    .swagger-ui .dialog-ux .modal-ux-content {
+        background: var(--bg-card) !important;
+    }
+
+    .swagger-ui .dialog-ux .modal-ux label {
+        color: var(--text-gray) !important;
+    }
+
+    .swagger-ui .dialog-ux .modal-ux h4 {
+        color: var(--text-main) !important;
+    }
+
+    /* =================================================================
+   7. BUTTONS & INPUTS
+   ================================================================= */
+    .swagger-ui .btn {
+        background: transparent;
+        border: 1px solid var(--neon-blue);
+        color: var(--neon-blue);
+        box-shadow: none;
+        transition: all 0.2s;
+    }
+
+        .swagger-ui .btn:hover {
+            background: var(--neon-blue);
+            color: #000;
+            box-shadow: 0 0 10px var(--neon-blue);
+        }
+
+        .swagger-ui .btn.execute {
+            background: rgba(255, 0, 200, 0.1);
+            border-color: var(--neon-pink);
+            color: var(--neon-pink);
+            width: 100%;
+        }
+
+            .swagger-ui .btn.execute:hover {
+                background: var(--neon-pink);
+                color: #000;
+                box-shadow: 0 0 15px var(--neon-pink);
+            }
+
+    .swagger-ui .auth-wrapper .authorize {
+        border: 1px solid var(--neon-green);
+        color: var(--neon-green);
+        background: transparent;
+    }
+
+        .swagger-ui .auth-wrapper .authorize:hover {
+            background: var(--neon-green);
+            color: #000;
+            box-shadow: 0 0 10px var(--neon-green);
+        }
+
+    /* Form Inputs */
+    .swagger-ui input,
+    .swagger-ui textarea,
+    .swagger-ui select {
+        background: #0a0a12 !important;
+        border: 1px solid #444;
+        color: var(--neon-blue);
+    }
+
+        .swagger-ui input:focus,
+        .swagger-ui textarea:focus {
+            border-color: var(--neon-blue);
+            outline: none;
+            box-shadow: 0 0 5px var(--border-glow);
+        }
+
+    .swagger-ui section.models {
+        border: 1px solid var(--border-glow);
+        background: var(--bg-card);
+    }
+
+        .swagger-ui section.models h4 {
+            color: var(--text-gray);
+        }
