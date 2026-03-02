@@ -18,16 +18,13 @@ namespace RAG.APIs.Infrastructure
     {
         public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
         {
-            // 1. Cấu hình Database
             var connectionString = configuration.GetConnectionString("DefaultConnection");
             services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseNpgsql(connectionString));
-            // 2. Cấu hình AWS
-            // --- 2. Cấu hình AWS (SỬA LẠI ĐOẠN NÀY) ---
+            
             var awsOptions = configuration.GetAWSOptions();
             var accessKey = configuration["AWS:AccessKey"];
             var secretKey = configuration["AWS:SecretKey"];
-            // Kiểm tra nếu có key thì gán cứng vào Options luôn
             if (!string.IsNullOrEmpty(accessKey) && !string.IsNullOrEmpty(secretKey))
             {
                 awsOptions.Credentials = new Amazon.Runtime.BasicAWSCredentials(accessKey, secretKey);
@@ -35,7 +32,6 @@ namespace RAG.APIs.Infrastructure
 
             services.AddDefaultAWSOptions(awsOptions);
             services.AddAWSService<IAmazonCognitoIdentityProvider>();
-            // Kiểm tra nếu có key thì gán cứng vào Options luôn
             if (!string.IsNullOrEmpty(accessKey) && !string.IsNullOrEmpty(secretKey))
             {
                 awsOptions.Credentials = new Amazon.Runtime.BasicAWSCredentials(accessKey, secretKey);
@@ -45,6 +41,8 @@ namespace RAG.APIs.Infrastructure
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<ICognitoAuthService, CognitoAuthService>();
             services.AddScoped<IRoleRepository, RoleRepository>();
+            services.AddScoped<ICompanyRepository, CompanyRepository>();
+            services.AddScoped<ICompanyService, CompanyService>();
             services.AddTransient<IClaimsTransformation, RoleClaimsTransformation>();
             //
             services.AddAuthentication(options =>
@@ -55,9 +53,6 @@ namespace RAG.APIs.Infrastructure
 .AddJwtBearer(options =>
 {
     var authorityUrl = configuration["AWS:Authority"];
-    Console.WriteLine("========================================");
-    Console.WriteLine($"🔍 GIÁ TRỊ CODE ĐỌC ĐƯỢC: '{authorityUrl}'");
-    Console.WriteLine("========================================");
     options.Authority = authorityUrl;
     options.TokenValidationParameters = new TokenValidationParameters
     {
