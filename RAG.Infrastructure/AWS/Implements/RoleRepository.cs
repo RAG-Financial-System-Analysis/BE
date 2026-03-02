@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using RAG.Application.Interfaces;
+using RAG.Domain;
 using RAG.Infrastructure.Database;
 using System;
 using System.Collections.Generic;

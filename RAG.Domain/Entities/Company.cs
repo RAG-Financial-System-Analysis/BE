@@ -1,25 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
-namespace RAG.Infrastructure;
+namespace RAG.Domain;
 
-[Table("Company")]
 public partial class Company
 {
-    [Key]
     public Guid Id { get; set; }
 
-    public string Name { get; set; } = null!;
+    public string Ticker { get; set; } = null!;
 
-    public string? Ticker { get; set; }
+    public string Name { get; set; } = null!;
 
     public string? Industry { get; set; }
 
     public string? Description { get; set; }
 
-    [InverseProperty("Company")]
+    public string? Website { get; set; }
+
+    public DateTime? Createdat { get; set; }
+
+    public DateTime? Updatedat { get; set; }
+
     public virtual ICollection<ReportFinancial> ReportFinancials { get; set; } = new List<ReportFinancial>();
 }

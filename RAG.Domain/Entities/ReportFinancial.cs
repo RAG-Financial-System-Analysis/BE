@@ -1,46 +1,43 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
-namespace RAG.Infrastructure;
+namespace RAG.Domain;
 
-[Table("Report_Financial")]
 public partial class ReportFinancial
 {
-    [Key]
     public Guid Id { get; set; }
 
-    public Guid CompanyId { get; set; }
+    public Guid Companyid { get; set; }
 
-    public Guid CategoryId { get; set; }
+    public Guid Categoryid { get; set; }
 
-    public Guid? SourceId { get; set; }
+    public Guid Uploadedby { get; set; }
 
     public int Year { get; set; }
 
     public string? Period { get; set; }
 
-    public string? FileUrl { get; set; }
+    public string Fileurl { get; set; } = null!;
 
-    public string? ContentRaw { get; set; }
+    public string? Filename { get; set; }
 
-    [InverseProperty("ReportFinancial")]
+    public int? Filesizekb { get; set; }
+
+    public string? Contentraw { get; set; }
+
+    public string? Visibility { get; set; }
+
+    public DateTime? Createdat { get; set; }
+
+    public DateTime? Updatedat { get; set; }
+
     public virtual ICollection<AnalyticsReport> AnalyticsReports { get; set; } = new List<AnalyticsReport>();
 
-    [ForeignKey("CategoryId")]
-    [InverseProperty("ReportFinancials")]
     public virtual ReportCategory Category { get; set; } = null!;
 
-    [ForeignKey("CompanyId")]
-    [InverseProperty("ReportFinancials")]
     public virtual Company Company { get; set; } = null!;
 
-    [InverseProperty("Report")]
     public virtual ICollection<RatioValue> RatioValues { get; set; } = new List<RatioValue>();
 
-    [ForeignKey("SourceId")]
-    [InverseProperty("ReportFinancials")]
-    public virtual Source? Source { get; set; }
+    public virtual User UploadedbyNavigation { get; set; } = null!;
 }

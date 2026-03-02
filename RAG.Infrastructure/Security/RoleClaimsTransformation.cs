@@ -37,7 +37,7 @@ namespace RAG.Infrastructure.Security
             var userRole = await _context.Users
                 .AsNoTracking()
                 .Include(u => u.Role) 
-                .Where(u => u.CognitoSub == cognitoSub)
+                .Where(u => u.Cognitosub == cognitoSub)
                 .Select(u => u.Role.Name) 
                 .FirstOrDefaultAsync();
             if (!string.IsNullOrEmpty(userRole))

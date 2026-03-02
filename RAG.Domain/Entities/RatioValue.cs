@@ -1,33 +1,23 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
-namespace RAG.Infrastructure;
+namespace RAG.Domain;
 
-[Table("Ratio_Value")]
 public partial class RatioValue
 {
-    [Key]
     public Guid Id { get; set; }
 
-    public Guid ReportId { get; set; }
+    public Guid Reportid { get; set; }
 
-    public Guid DefinitionId { get; set; }
+    public Guid Definitionid { get; set; }
 
-    [Precision(18, 4)]
     public decimal? Value { get; set; }
 
-    [ForeignKey("DefinitionId")]
-    [InverseProperty("RatioValues")]
+    public DateTime? Createdat { get; set; }
+
     public virtual RatioDefinition Definition { get; set; } = null!;
 
-    [ForeignKey("ReportId")]
-    [InverseProperty("RatioValues")]
-    public virtual ReportFinancial Report { get; set; } = null!;
+    public virtual ICollection<PromptRatiovalue> PromptRatiovalues { get; set; } = new List<PromptRatiovalue>();
 
-    [ForeignKey("RatioValueId")]
-    [InverseProperty("RatioValues")]
-    public virtual ICollection<QuestionPrompt> Prompts { get; set; } = new List<QuestionPrompt>();
+    public virtual ReportFinancial Report { get; set; } = null!;
 }

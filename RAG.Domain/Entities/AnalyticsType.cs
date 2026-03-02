@@ -3,9 +3,11 @@ using System.Collections.Generic;
 
 namespace RAG.Domain;
 
-public partial class Role
+public partial class AnalyticsType
 {
     public Guid Id { get; set; }
+
+    public string Code { get; set; } = null!;
 
     public string Name { get; set; } = null!;
 
@@ -13,5 +15,5 @@ public partial class Role
 
     public DateTime? Createdat { get; set; }
 
-    public virtual ICollection<User> Users { get; set; } = new List<User>();
+    public virtual ICollection<ChatSession> ChatSessions { get; set; } = new List<ChatSession>();
 }

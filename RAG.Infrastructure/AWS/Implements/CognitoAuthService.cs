@@ -4,6 +4,8 @@ using Amazon.Runtime.Internal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using RAG.Application.Interfaces;
+using RAG.Domain;
+
 
 //using RAG.Application.Interfaces;
 using RAG.Domain.DTOs.Auth;
@@ -68,7 +70,7 @@ namespace RAG.Infrastructure.AWS.Implements
             if (userInDb != null)
             {
                 roleName = userInDb.Role?.Name ?? "Member";
-                fullName = userInDb.FullName;
+                fullName = userInDb.Fullname;
             }
 
             return new AuthResponse
@@ -107,11 +109,11 @@ namespace RAG.Infrastructure.AWS.Implements
                 var newUser = new User
                 {
                     Id = Guid.NewGuid(),
-                    CognitoSub = userSub,
+                    Cognitosub = userSub,
                     Email = item.Email,
-                    FullName = item.FullName,
-                    RoleId = roleMember.Id,
-                    CreatedAt = DateTime.UtcNow.ToLocalTime()
+                    Fullname = item.FullName,
+                    Roleid = roleMember.Id,
+                    Createdat = DateTime.UtcNow.ToLocalTime()
                 };
 
                 await _userRepository.AddAsync(newUser);

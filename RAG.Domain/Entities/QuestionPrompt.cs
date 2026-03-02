@@ -1,35 +1,27 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
-namespace RAG.Infrastructure;
+namespace RAG.Domain;
 
-[Table("Question_Prompt")]
 public partial class QuestionPrompt
 {
-    [Key]
     public Guid Id { get; set; }
 
-    public Guid SessionId { get; set; }
+    public Guid Sessionid { get; set; }
 
-    public string QuestionText { get; set; } = null!;
+    public string Questiontext { get; set; } = null!;
 
-    public string? ResponseText { get; set; }
+    public string? Responsetext { get; set; }
 
-    [Column(TypeName = "timestamp without time zone")]
-    public DateTime? CreatedAt { get; set; }
+    public int? Retrievalcount { get; set; }
 
-    [ForeignKey("SessionId")]
-    [InverseProperty("QuestionPrompts")]
+    public string? Generationmodel { get; set; }
+
+    public DateTime? Createdat { get; set; }
+
+    public virtual ICollection<PromptAnalytic> PromptAnalytics { get; set; } = new List<PromptAnalytic>();
+
+    public virtual ICollection<PromptRatiovalue> PromptRatiovalues { get; set; } = new List<PromptRatiovalue>();
+
     public virtual ChatSession Session { get; set; } = null!;
-
-    [ForeignKey("PromptId")]
-    [InverseProperty("Prompts")]
-    public virtual ICollection<AnalyticsReport> Analytics { get; set; } = new List<AnalyticsReport>();
-
-    [ForeignKey("PromptId")]
-    [InverseProperty("Prompts")]
-    public virtual ICollection<RatioValue> RatioValues { get; set; } = new List<RatioValue>();
 }

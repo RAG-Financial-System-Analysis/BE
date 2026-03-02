@@ -1,31 +1,33 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
-namespace RAG.Infrastructure;
+namespace RAG.Domain;
 
-[Table("Analytics_Report")]
 public partial class AnalyticsReport
 {
-    [Key]
     public Guid Id { get; set; }
 
-    public Guid? ReportFinancialId { get; set; }
+    public Guid? Sessionid { get; set; }
+
+    public Guid? Reportfinancialid { get; set; }
 
     public string? Title { get; set; }
 
-    public string? GeneratedContent { get; set; }
+    public string? Generatedcontent { get; set; }
 
-    [Column(TypeName = "timestamp without time zone")]
-    public DateTime? CreatedAt { get; set; }
+    public string? Fileurl { get; set; }
 
-    [ForeignKey("ReportFinancialId")]
-    [InverseProperty("AnalyticsReports")]
-    public virtual ReportFinancial? ReportFinancial { get; set; }
+    public string? Generationtype { get; set; }
 
-    [ForeignKey("AnalyticsId")]
-    [InverseProperty("Analytics")]
-    public virtual ICollection<QuestionPrompt> Prompts { get; set; } = new List<QuestionPrompt>();
+    public Guid? Generatedby { get; set; }
+
+    public DateTime? Createdat { get; set; }
+
+    public virtual User? GeneratedbyNavigation { get; set; }
+
+    public virtual ICollection<PromptAnalytic> PromptAnalytics { get; set; } = new List<PromptAnalytic>();
+
+    public virtual ReportFinancial? Reportfinancial { get; set; }
+
+    public virtual ChatSession? Session { get; set; }
 }

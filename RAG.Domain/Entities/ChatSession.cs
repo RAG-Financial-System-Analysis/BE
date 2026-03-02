@@ -1,28 +1,29 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
-namespace RAG.Infrastructure;
+namespace RAG.Domain;
 
-[Table("Chat_Sessions")]
 public partial class ChatSession
 {
-    [Key]
     public Guid Id { get; set; }
 
-    public Guid UserId { get; set; }
+    public Guid Userid { get; set; }
+
+    public Guid? Analyticstypeid { get; set; }
 
     public string? Title { get; set; }
 
-    [Column(TypeName = "timestamp without time zone")]
-    public DateTime? StartTime { get; set; }
+    public DateTime? Starttime { get; set; }
 
-    [InverseProperty("Session")]
+    public DateTime? Lastmessageat { get; set; }
+
+    public DateTime? Createdat { get; set; }
+
+    public virtual ICollection<AnalyticsReport> AnalyticsReports { get; set; } = new List<AnalyticsReport>();
+
+    public virtual AnalyticsType? Analyticstype { get; set; }
+
     public virtual ICollection<QuestionPrompt> QuestionPrompts { get; set; } = new List<QuestionPrompt>();
 
-    [ForeignKey("UserId")]
-    [InverseProperty("ChatSessions")]
     public virtual User User { get; set; } = null!;
 }

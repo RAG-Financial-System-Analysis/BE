@@ -1,31 +1,35 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
-namespace RAG.Infrastructure;
+namespace RAG.Domain;
 
-[Table("Users")]
-[Index("Email", Name = "Users_Email_key", IsUnique = true)]
 public partial class User
 {
-    [Key]
     public Guid Id { get; set; }
 
-    public Guid RoleId { get; set; }
+    public Guid Roleid { get; set; }
 
-    public string CognitoSub { get; set; } = null!;
+    public string? Cognitosub { get; set; }
 
     public string Email { get; set; } = null!;
 
-    public string? FullName { get; set; }
+    public string? Passwordhash { get; set; }
 
-    [Column(TypeName = "timestamp without time zone")]
-    public DateTime? CreatedAt { get; set; }
+    public string? Fullname { get; set; }
 
-    [InverseProperty("User")]
+    public bool? Isactive { get; set; }
+
+    public DateTime? Createdat { get; set; }
+
+    public DateTime? Lastloginat { get; set; }
+
+    public virtual ICollection<AnalyticsReport> AnalyticsReports { get; set; } = new List<AnalyticsReport>();
+
+    public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+
     public virtual ICollection<ChatSession> ChatSessions { get; set; } = new List<ChatSession>();
+
+    public virtual ICollection<ReportFinancial> ReportFinancials { get; set; } = new List<ReportFinancial>();
 
     public virtual Role Role { get; set; } = null!;
 }

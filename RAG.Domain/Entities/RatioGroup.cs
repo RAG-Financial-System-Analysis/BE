@@ -1,19 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
-namespace RAG.Infrastructure;
+namespace RAG.Domain;
 
-[Table("Ratio_Group")]
 public partial class RatioGroup
 {
-    [Key]
     public Guid Id { get; set; }
 
     public string Name { get; set; } = null!;
 
-    [InverseProperty("Group")]
+    public string? Description { get; set; }
+
     public virtual ICollection<RatioDefinition> RatioDefinitions { get; set; } = new List<RatioDefinition>();
 }
