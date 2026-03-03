@@ -45,8 +45,8 @@ namespace RAG.Infrastructure.Database
             // 1. Ensure Roles exist
             var roles = new List<Role>
             {
-                new Role { Id = Guid.NewGuid(), Name = SystemRoles.Admin, Description = "Administrator role", Createdat = DateTime.UtcNow },
-                new Role { Id = Guid.NewGuid(), Name = SystemRoles.Analyst, Description = "Analyst role", Createdat = DateTime.UtcNow }
+                new Role { Id = Guid.NewGuid(), Name = SystemRoles.Admin, Description = "Administrator role", Createdat = DateTime.Now },
+                new Role { Id = Guid.NewGuid(), Name = SystemRoles.Analyst, Description = "Analyst role", Createdat = DateTime.Now }
             };
 
             foreach (var role in roles)
@@ -201,7 +201,7 @@ namespace RAG.Infrastructure.Database
                     Fullname = fullName,
                     Roleid = role.Id,
                     Cognitosub = cognitoSub,
-                    Createdat = DateTime.UtcNow,
+                    Createdat = DateTime.Now,
                     Isactive = true
                 };
 
