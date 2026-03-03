@@ -44,6 +44,7 @@ namespace RAG.APIs.Infrastructure
             services.AddScoped<ICompanyRepository, CompanyRepository>();
             services.AddScoped<ICompanyService, CompanyService>();
             services.AddTransient<IClaimsTransformation, RoleClaimsTransformation>();
+            services.AddScoped<DbInitializer>();
             //
             services.AddAuthentication(options =>
             {

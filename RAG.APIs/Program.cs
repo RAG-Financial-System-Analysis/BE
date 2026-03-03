@@ -5,7 +5,7 @@ using Microsoft.OpenApi.Models;
 using RAG.APIs.Infrastructure;
 //using RAG.Application.Interfaces;
 using RAG.Infrastructure.AWS;
-//using RAG.Infrastructure.Database;
+using RAG.Infrastructure.Database;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -65,6 +65,10 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Run Database Initializer
+await app.Services.UseDbInitializer();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger(); 

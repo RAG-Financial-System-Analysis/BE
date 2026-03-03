@@ -120,7 +120,23 @@ namespace RAG.Infrastructure.AWS.Implements
             }
             catch (Exception ex)
             {
-                throw new Exception($"Đăng ký AWS thành công nhưng không thể lưu vào Database: {ex.Message}");
+                // Thực hiện Rollback trên Cognito (Xóa tài khoản vừa tạo)
+                try
+                {
+                    var deleteRequest = new AdminDeleteUserRequest
+                    {
+                        UserPoolId = _userPoolId,
+                        Username = item.Email
+                    };
+                    await _cognitoClient.AdminDeleteUserAsync(deleteRequest);
+                }
+                catch (Exception rollbackEx)
+                {
+                    // Trường hợp tồi tệ nhất: Cả DB và việc Rollback đều thất bại
+                    throw new Exception($"Đăng ký AWS thành công nhưng lưu vào Database thất bại. ĐÃ XẢY RA LỖI KHI ROLLBACK TÀI KHOẢN COGNITO: DB Error ({ex.Message}), Rollback Error ({rollbackEx.Message})");
+                }
+
+                throw new Exception($"Không thể lưu vào Database, đã Rollback (xóa) tài khoản trên Cognito thành công. DB Error: {ex.Message}");
             }
 
             return userSub;
