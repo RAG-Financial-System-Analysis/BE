@@ -1,11 +1,13 @@
+﻿using Amazon.Runtime;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using RAG.Application.Interfaces;
 using RAG.Application.Interfaces.Pdfs;
 using RAG.Domain;
 using RAG.Domain.DTOs.Report;
+using RAG.Domain.Enum;
 using RAG.Infrastructure.Database;
 using System;
 using System.Collections.Generic;
@@ -173,5 +175,131 @@ namespace RAG.Infrastructure.Services
                 throw;
             }
         }
+        public async Task<GetOwnReport<MyReportItemDto>> GetMyReportsAsync(Guid userId, int page = 1, int pageSize = 10)
+        {
+            var query = _context.ReportFinancials
+                .Include(r => r.Company)
+                .Include(r => r.Category)
+                .Where(r => r.Uploadedby == userId)
+                .OrderByDescending(r => r.Createdat); 
+
+            var total = await query.CountAsync();
+            var data = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(r => new MyReportItemDto
+                {
+                    Id = r.Id,
+                    CompanyName = r.Company.Name,
+                    Ticker = r.Company.Ticker,
+                    CategoryName = r.Category.Name,
+                    Year = r.Year,
+                    Period = r.Period,
+                    Visibility = r.Visibility,
+                    FileName = r.Filename,
+                    FileSizeKb = r.Filesizekb,
+                    CreatedAt = r.Createdat
+                })
+                .ToListAsync();
+            return new GetOwnReport<MyReportItemDto>
+            {
+                Total = total,
+                Page = page,
+                PageSize = pageSize,
+                Data = data
+            };
+        }
+        public async Task<GetOwnReport<MyReportItemDto>> GetPublicReportsAsync(int page = 1, int pageSize = 10)
+        {
+            var query = _context.ReportFinancials
+                .Include(r => r.Company)
+                .Include(r => r.Category)
+                .Where(r => r.Visibility == "public")  
+                .OrderByDescending(r => r.Createdat);
+
+            var total = await query.CountAsync();
+            var data = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(r => new MyReportItemDto
+                {
+                    Id = r.Id,
+                    CompanyName = r.Company.Name,
+                    Ticker = r.Company.Ticker,
+                    CategoryName = r.Category.Name,
+                    Year = r.Year,
+                    Period = r.Period,
+                    Visibility = r.Visibility,
+                    FileName = r.Filename,
+                    FileSizeKb = r.Filesizekb,
+                    CreatedAt = r.Createdat
+                })
+                .ToListAsync();
+
+            return new GetOwnReport<MyReportItemDto>
+            {
+                Total = total,
+                Page = page,
+                PageSize = pageSize,
+                Data = data
+            };
+        }
+        public async Task<ReportDetailDto> GetReportByIdAsync(Guid reportId, Guid userId, string userRole)
+        {
+            var report = await _context.ReportFinancials
+                .Include(r => r.Company)
+                .Include(r => r.Category)
+                .Include(r => r.UploadedbyNavigation)
+                .Include(r => r.RatioValues)
+                    .ThenInclude(rv => rv.Definition)
+                .FirstOrDefaultAsync(r => r.Id == reportId);
+
+            if (report == null)
+            {
+                throw new KeyNotFoundException("Report not found.");
+            }
+            if (userRole != SystemRoles.Admin)
+            {
+                if (report.Visibility != "public" && report.Uploadedby != userId)
+                {
+                    throw new UnauthorizedAccessException("You do not have permission to view this report.");
+                }
+            }
+
+            // Map Entity sang DTO
+            var metrics = report.RatioValues.Select(rv => new MetricResponse
+            {
+                Code = rv.Definition.Code,
+                Name = rv.Definition.Name,
+                Value = rv.Value ?? 0,
+                Unit = rv.Definition.Unit ?? ""
+            }).ToList();
+
+            return new ReportDetailDto
+            {
+                Id = report.Id,
+                Company = new CompanyBriefDto
+                {
+                    Id = report.Company.Id,
+                    Ticker = report.Company.Ticker,
+                    Name = report.Company.Name
+                },
+                CategoryName = report.Category.Name,
+                Year = report.Year,
+                Period = report.Period,
+                FileUrl = report.Fileurl,
+                FileName = report.Filename,
+                FileSizeKb = report.Filesizekb,
+                Visibility = report.Visibility,
+                UploadedBy = new UserBriefDto
+                {
+                    Id = report.UploadedbyNavigation.Id,
+                    FullName = report.UploadedbyNavigation.Fullname
+                },
+                CreatedAt = report.Createdat,
+                Metrics = metrics
+            };
+        }
+
     }
 }
