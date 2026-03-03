@@ -10,6 +10,7 @@ using RAG.Infrastructure.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using RAG.Application.Interfaces.Pdfs;
 //using RAG.Infrastructure.Database;
 
 namespace RAG.APIs.Infrastructure
@@ -43,6 +44,8 @@ namespace RAG.APIs.Infrastructure
             services.AddScoped<IRoleRepository, RoleRepository>();
             services.AddScoped<ICompanyRepository, CompanyRepository>();
             services.AddScoped<ICompanyService, CompanyService>();
+            services.AddScoped<IPdfExtractService, RAG.Infrastructure.Services.PdfExtractService>();
+            services.AddScoped<IReportService, RAG.Infrastructure.Services.ReportService>();
             services.AddTransient<IClaimsTransformation, RoleClaimsTransformation>();
             services.AddScoped<DbInitializer>();
             //
