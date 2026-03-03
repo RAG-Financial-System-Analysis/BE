@@ -46,6 +46,7 @@ namespace RAG.APIs.Infrastructure
             services.AddScoped<ICompanyService, CompanyService>();
             services.AddScoped<IPdfExtractService, RAG.Infrastructure.Services.PdfExtractService>();
             services.AddScoped<IReportService, RAG.Infrastructure.Services.ReportService>();
+            services.AddScoped<IChatService, RAG.Infrastructure.Services.ChatService>();
             services.AddTransient<IClaimsTransformation, RoleClaimsTransformation>();
             services.AddScoped<DbInitializer>();
             //

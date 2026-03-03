@@ -300,6 +300,189 @@ namespace RAG.Infrastructure.Services
                 Metrics = metrics
             };
         }
+        public async Task<(string FilePath, string FileName)> DownloadReportAsync(Guid reportId, Guid userId, string userRole)
+        {
+            var report = await _context.ReportFinancials.FirstOrDefaultAsync(r => r.Id == reportId);
+
+            if (report == null)
+            {
+                throw new KeyNotFoundException("Report not found.");
+            }
+
+            if (userRole != SystemRoles.Admin)
+            {
+                if (report.Visibility != "public" && report.Uploadedby != userId)
+                {
+                    throw new UnauthorizedAccessException("You do not have permission to download this report.");
+                }
+            }
+
+            if (string.IsNullOrEmpty(report.Fileurl))
+            {
+                throw new FileNotFoundException("The physical file path is empty in database.");
+            }
+
+            var relativePath = report.Fileurl.TrimStart('/');
+            var physicalPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath);
+
+            return (physicalPath, report.Filename ?? "Report.pdf");
+        }
+        public async Task<bool> UpdateVisibilityAsync(Guid reportId, string visibility, Guid userId, string userRole)
+        {
+            var report = await _context.ReportFinancials.FirstOrDefaultAsync(r => r.Id == reportId);
+            if (report == null)
+            {
+                throw new KeyNotFoundException("Report not found.");
+            }
+
+            // Chỉ Owner hoặc Admin mới được phép Update
+            if (userRole != SystemRoles.Admin && report.Uploadedby != userId)
+            {
+                throw new UnauthorizedAccessException("You do not have permission to update this report.");
+            }
+
+            var allowedVisibility = new[] { "public", "private" };
+            if (!allowedVisibility.Contains(visibility.ToLower()))
+            {
+                throw new ArgumentException("Visibility must be 'public' or 'private'.");
+            }
+
+            report.Visibility = visibility.ToLower();
+            report.Updatedat = DateTime.Now;
+
+            _context.ReportFinancials.Update(report);
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<bool> DeleteReportAsync(Guid reportId, Guid userId, string userRole)
+        {
+            var report = await _context.ReportFinancials.FirstOrDefaultAsync(r => r.Id == reportId);
+            if (report == null)
+            {
+                throw new KeyNotFoundException("Report not found.");
+            }
+
+            // Chỉ Owner hoặc Admin mới được phép Xoá
+            if (userRole != SystemRoles.Admin && report.Uploadedby != userId)
+            {
+                throw new UnauthorizedAccessException("You do not have permission to delete this report.");
+            }
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // Cascade Delete: Thông thường khi xoá Report, Data ở RatioValue và Analytics (nếu có) cũng phải xoá theo
+                // Tuy nhiên, nếu cấu hình DB đã có ON DELETE CASCADE, ta có thể bỏ qua bước xoá RatioValue thủ công
+                var ratioValues = await _context.RatioValues.Where(rv => rv.Reportid == reportId).ToListAsync();
+                if (ratioValues.Any())
+                {
+                    _context.RatioValues.RemoveRange(ratioValues);
+                }
+
+                _context.ReportFinancials.Remove(report);
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                // Lưu ý: Có thể cân nhắc thêm bước xoá Object file trên Ổ cứng/S3 (Optional)
+                if (!string.IsNullOrEmpty(report.Fileurl))
+                {
+                    var relativePath = report.Fileurl.TrimStart('/');
+                    var physicalPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath);
+                    if (System.IO.File.Exists(physicalPath))
+                    {
+                        System.IO.File.Delete(physicalPath);
+                    }
+                }
+
+                return true;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+        public async Task<GetOwnReport<ReportSearchDto>> SearchReportsAsync(string search, Guid? companyId, int? year, string? period, Guid userId, string userRole)
+        {
+            var query = _context.ReportFinancials.Include(r => r.Company).AsQueryable();
+
+            // Lọc Permission (Chỉ lấy bài Public Hoặc của chính user đó nếu không phải Admin)
+            if (userRole != SystemRoles.Admin)
+            {
+                query = query.Where(r => r.Visibility == "public" || r.Uploadedby == userId);
+            }
+
+            // Lọc theo keyword (Search trong Tên Công ty, Ticker, hoặc tên file)
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                search = $"%{search.ToLower()}%";
+                query = query.Where(r => EF.Functions.ILike(r.Company.Name, search) ||
+                                         EF.Functions.ILike(r.Company.Ticker, search) ||
+                                         EF.Functions.ILike(r.Filename, search));
+            }
+
+            // Lọc Optional Parameters
+            if (companyId.HasValue) query = query.Where(r => r.Companyid == companyId.Value);
+            if (year.HasValue) query = query.Where(r => r.Year == year.Value);
+            if (!string.IsNullOrWhiteSpace(period)) query = query.Where(r => r.Period == period);
+
+            var total = await query.CountAsync();
+
+            var data = await query.Take(10).Select(r => new ReportSearchDto
+            {
+                Id = r.Id,
+                Ticker = r.Company.Ticker,
+                CompanyName = r.Company.Name,
+                Year = r.Year,
+                Period = r.Period,
+                RelevanceScore = 1.0 
+            }).ToListAsync();
+
+            return new GetOwnReport<ReportSearchDto>
+            {
+                Total = total,
+                Page = 1,
+                PageSize = 10,
+                Data = data
+            };
+        }
+        public async Task<ReportMetricsDto> GetReportMetricsAsync(Guid reportId, Guid userId, string userRole)
+        {
+            var report = await _context.ReportFinancials.FirstOrDefaultAsync(r => r.Id == reportId);
+            if (report == null)
+            {
+                throw new KeyNotFoundException("Report not found.");
+            }
+
+            // Phân quyền
+            if (userRole != SystemRoles.Admin && report.Visibility != "public" && report.Uploadedby != userId)
+            {
+                throw new UnauthorizedAccessException("You do not have permission to view metrics for this report.");
+            }
+
+            var metrics = await _context.RatioValues
+                .Include(rv => rv.Definition)
+                    .ThenInclude(d => d.Group)
+                .Where(rv => rv.Reportid == reportId)
+                .Select(rv => new MetricDetailDto
+                {
+                    Id = rv.Id,
+                    Code = rv.Definition.Code,
+                    Name = rv.Definition.Name,
+                    Value = rv.Value ?? 0,
+                    Unit = rv.Definition.Unit,
+                    GroupName = rv.Definition.Group.Name
+                })
+                .ToListAsync();
+
+            return new ReportMetricsDto
+            {
+                ReportId = reportId,
+                Metrics = metrics
+            };
+        }
 
     }
 }

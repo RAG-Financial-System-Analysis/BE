@@ -13,5 +13,14 @@ namespace RAG.Application.Interfaces
 
         Task<ReportDetailDto> GetReportByIdAsync(Guid reportId, Guid userId, string userRole);
 
+        Task<(string FilePath, string FileName)> DownloadReportAsync(Guid reportId, Guid userId, string userRole);
+
+        Task<bool> UpdateVisibilityAsync(Guid reportId, string visibility, Guid userId, string userRole);
+
+        Task<bool> DeleteReportAsync(Guid reportId, Guid userId, string userRole);
+
+        Task<GetOwnReport<ReportSearchDto>> SearchReportsAsync(string search, Guid? companyId, int? year, string? period, Guid userId, string userRole);
+
+        Task<ReportMetricsDto> GetReportMetricsAsync(Guid reportId, Guid userId, string userRole);
     }
 }

@@ -1,4 +1,4 @@
-/* ===== CYBERPUNK SWAGGER THEME (FINAL V3 - FIX TEXT VISIBILITY) ===== */
+/* ===== CYBERPUNK SWAGGER THEME (FINAL V5 - ULTIMATE PATH FIX) ===== */
 
 :root {
     --bg-main: #0f0f1a; /* Nền chính siêu tối */
@@ -8,7 +8,7 @@
     --neon-pink: #ff00c8;
     --neon-green: #00ff9f;
     --text-main: #e0e0ff; /* Chữ chính sáng (trắng xanh) */
-    --text-gray: #aabccd; /* Đã chỉnh sáng hơn bản cũ để dễ đọc */
+    --text-gray: #aabccd; /* Chữ phụ màu xám sáng */
     --border-glow: rgba(0, 245, 255, 0.4);
 }
 
@@ -21,7 +21,6 @@
     font-family: "Segoe UI", sans-serif;
 }
 
-    /* Fix phần trắng phía trên header */
     .swagger-ui .swagger-container,
     .swagger-ui .scheme-container {
         background: var(--bg-main) !important;
@@ -29,7 +28,6 @@
         border-bottom: 1px solid var(--neon-blue);
     }
 
-    /* Topbar đen tuyền */
     .swagger-ui .topbar {
         background: #000000;
         border-bottom: 2px solid var(--neon-pink);
@@ -48,7 +46,6 @@
         color: var(--text-gray);
     }
 
-    /* Tên Controller (Tags) */
     .swagger-ui .opblock-tag {
         color: var(--text-gray);
         border-bottom: 1px solid var(--bg-hover);
@@ -59,11 +56,11 @@
         }
 
         .swagger-ui .opblock-tag small {
-            color: #778899; /* Mô tả controller */
+            color: #778899;
         }
 
     /* =================================================================
-   3. OPERATION BLOCK (API ENDPOINT)
+   3. OPERATION BLOCK (API ENDPOINT & PATH)
    ================================================================= */
     .swagger-ui .opblock {
         background: var(--bg-card);
@@ -76,6 +73,14 @@
         .swagger-ui .opblock:hover {
             background: var(--bg-hover);
             box-shadow: 0 0 15px rgba(255,0,200,0.3);
+        }
+
+        /* KHẮC PHỤC TRIỆT ĐỂ: Ép toàn bộ thẻ con bên trong Path (kể cả {id}) phải sáng */
+        .swagger-ui .opblock .opblock-summary-path,
+        .swagger-ui .opblock .opblock-summary-path * {
+            color: var(--text-main) !important;
+            font-weight: bold !important;
+            letter-spacing: 0.5px;
         }
 
         .swagger-ui .opblock .opblock-summary-description {
@@ -121,18 +126,15 @@
             border-bottom: 1px solid #333;
         }
 
-            /* Tiêu đề chính (Parameters, Responses, Request Body) */
             .swagger-ui .opblock .opblock-section-header h4 {
-                color: var(--text-main) !important; /* Đổi sang sáng để dễ đọc */
+                color: var(--text-main) !important;
                 font-weight: bold;
             }
 
-    /* Nút Try it out */
     .swagger-ui .try-out__btn {
         color: var(--text-main);
     }
 
-    /* Tabs (Schema/Example) */
     .swagger-ui .tab li {
         color: var(--text-gray) !important;
     }
@@ -143,48 +145,42 @@
         }
 
     /* =================================================================
-   5. FIX VISIBILITY CHO PHẦN RESPONSES & CURL (QUAN TRỌNG !!!)
+   5. FIX VISIBILITY CHO PHẦN RESPONSES & CURL
    ================================================================= */
-
-    /* Tiêu đề cột bảng (Code, Description, Links) */
     .swagger-ui table thead tr th,
     .swagger-ui .responses-table thead tr th {
-        color: var(--text-main) !important; /* Màu sáng */
+        color: var(--text-main) !important;
         border-bottom: 1px solid #444;
         font-size: 14px;
     }
 
-    /* Nội dung trong bảng không bị tối */
     .swagger-ui table tbody tr td {
         color: var(--text-gray);
         border-bottom: 1px solid #333;
     }
 
-    /* Tiêu đề con: Response body, Response headers, Curl, Server response */
     .swagger-ui .opblock-description-wrapper h4,
     .swagger-ui .responses-inner h4,
     .swagger-ui .responses-inner h5 {
-        color: var(--text-main) !important; /* Đổi thành màu sáng */
+        color: var(--text-main) !important;
         opacity: 0.9;
     }
 
-    /* Mô tả mã lỗi (200, 400...) */
     .swagger-ui .response-col_status {
-        color: var(--neon-green); /* Code 200 màu xanh lá cho đẹp */
+        color: var(--neon-green);
     }
 
     .swagger-ui .response-col_description {
         color: var(--text-gray);
     }
 
-    /* Khung Curl & Code */
     .swagger-ui .highlight-code {
         background-color: #0a0a12 !important;
         border: 1px solid var(--border-glow);
     }
 
     .swagger-ui .microlight {
-        color: var(--text-main) !important; /* Code trong khung hiển thị rõ */
+        color: var(--text-main) !important;
     }
 
     /* =================================================================
