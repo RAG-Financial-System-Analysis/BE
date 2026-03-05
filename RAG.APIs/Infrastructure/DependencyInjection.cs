@@ -35,6 +35,7 @@ namespace RAG.APIs.Infrastructure
 
             services.AddDefaultAWSOptions(awsOptions);
             services.AddAWSService<IAmazonCognitoIdentityProvider>();
+            services.AddAWSService<Amazon.S3.IAmazonS3>();
             if (!string.IsNullOrEmpty(accessKey) && !string.IsNullOrEmpty(secretKey))
             {
                 awsOptions.Credentials = new Amazon.Runtime.BasicAWSCredentials(accessKey, secretKey);
