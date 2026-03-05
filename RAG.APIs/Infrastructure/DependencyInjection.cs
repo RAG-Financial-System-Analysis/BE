@@ -1,16 +1,18 @@
 ﻿using Amazon.CognitoIdentityProvider;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using RAG.Application.Interfaces;
-using Microsoft.AspNetCore.Authentication;
+using RAG.Application.Interfaces.OpenAI;
+using RAG.Application.Interfaces.Pdfs;
 using RAG.Infrastructure.AWS.Implements;
 using RAG.Infrastructure.AWS.Interface;
 using RAG.Infrastructure.Database;
 using RAG.Infrastructure.Security;
-using Microsoft.Extensions.Configuration;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using RAG.Application.Interfaces.Pdfs;
+using RAG.Infrastructure.Services;
 //using RAG.Infrastructure.Database;
 
 namespace RAG.APIs.Infrastructure
@@ -44,10 +46,13 @@ namespace RAG.APIs.Infrastructure
             services.AddScoped<IRoleRepository, RoleRepository>();
             services.AddScoped<ICompanyRepository, CompanyRepository>();
             services.AddScoped<ICompanyService, CompanyService>();
-            services.AddScoped<IPdfExtractService, RAG.Infrastructure.Services.PdfExtractService>();
-            services.AddScoped<IReportService, RAG.Infrastructure.Services.ReportService>();
-            services.AddScoped<IChatService, RAG.Infrastructure.Services.ChatService>();
-            services.AddScoped<RAG.Application.Interfaces.OpenAI.IRagService, RAG.Infrastructure.Services.RagService>();
+            services.AddScoped<IUserService, UserService>();
+            services.AddScoped<RAG.Application.Interfaces.Analaytic.IAnalyticsService, AnalyticsService>();
+            services.AddScoped<IS3Service, S3Service>();
+            services.AddScoped<IPdfExtractService, PdfExtractService>();
+            services.AddScoped<IReportService, ReportService>();
+            services.AddScoped<IChatService, ChatService>();
+            services.AddScoped<IRagService, RagService>();
             services.AddTransient<IClaimsTransformation, RoleClaimsTransformation>();
             services.AddScoped<DbInitializer>();
             //
