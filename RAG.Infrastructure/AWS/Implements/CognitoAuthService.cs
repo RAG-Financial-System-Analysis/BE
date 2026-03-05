@@ -5,13 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using RAG.Application.Interfaces;
 using RAG.Domain;
-
-
-//using RAG.Application.Interfaces;
 using RAG.Domain.DTOs.Auth;
 using RAG.Domain.Enum;
-
-//using RAG.Domain.Entities;
 using RAG.Infrastructure.AWS.Interface;
 using RAG.Infrastructure.Database;
 using System;

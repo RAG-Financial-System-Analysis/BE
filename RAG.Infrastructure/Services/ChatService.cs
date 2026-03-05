@@ -41,5 +41,53 @@ namespace RAG.Infrastructure.Services
                 Message = "Session created successfully"
             };
         }
+
+        public async Task<GetChatHistoryResponse> GetChatHistoryAsync(Guid sessionId, Guid userId)
+        {
+            var sessionExists = await _context.ChatSessions.AnyAsync(s => s.Id == sessionId && s.Userid == userId);
+            if (!sessionExists) throw new ArgumentException("Session not found or forbidden");
+
+            var messages = await _context.QuestionPrompts
+                .Where(p => p.Sessionid == sessionId)
+                .OrderBy(p => p.Createdat)
+                .Select(p => new MessageDto
+                {
+                    Id = p.Id,
+                    QuestionText = p.Questiontext,
+                    ResponseText = p.Responsetext ?? "",
+                    CreatedAt = p.Createdat ?? DateTime.UtcNow
+                })
+                .ToListAsync();
+
+            return new GetChatHistoryResponse
+            {
+                SessionId = sessionId,
+                Messages = messages
+            };
+        }
+
+        public async Task<GetMySessionsResponse> GetMySessionsAsync(Guid userId)
+        {
+            var sessions = await _context.ChatSessions
+                .Include(s => s.Analyticstype)
+                .Include(s => s.QuestionPrompts)
+                .Where(s => s.Userid == userId)
+                .OrderByDescending(s => s.Lastmessageat ?? s.Starttime)
+                .Select(s => new SessionItemDto
+                {
+                    Id = s.Id,
+                    Title = s.Title,
+                    AnalyticsTypeName = s.Analyticstype != null ? s.Analyticstype.Name : "",
+                    StartTime = s.Starttime ?? DateTime.UtcNow,
+                    LastMessageAt = s.Lastmessageat,
+                    MessageCount = s.QuestionPrompts.Count
+                })
+                .ToListAsync();
+
+            return new GetMySessionsResponse
+            {
+                Sessions = sessions
+            };
+        }
     }
 }
