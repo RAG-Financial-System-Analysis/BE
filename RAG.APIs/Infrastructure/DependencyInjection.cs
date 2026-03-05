@@ -48,6 +48,7 @@ namespace RAG.APIs.Infrastructure
             services.AddScoped<ICompanyService, CompanyService>();
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IAdminService, AdminService>();
+            services.AddScoped<IMetricService, MetricService>();
             services.AddScoped<RAG.Application.Interfaces.Analaytic.IAnalyticsService, AnalyticsService>();
             services.AddScoped<IS3Service, S3Service>();
             services.AddScoped<IPdfExtractService, PdfExtractService>();
