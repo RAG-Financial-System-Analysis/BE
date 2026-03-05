@@ -9,5 +9,6 @@ namespace RAG.Application.Interfaces
         Task<GetUsersResponse> GetAllUsersAsync(int page, int pageSize, Guid? roleId);
         Task<GetUserByIdResponse> GetUserByIdAsync(Guid id);
         Task UpdateUserAsync(Guid id, UpdateUserRequest request);
+        Task DeleteUserAsync(Guid id);
     }
 }

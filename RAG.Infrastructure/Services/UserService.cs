@@ -103,5 +103,21 @@ namespace RAG.Infrastructure.Services
             _dbContext.Users.Update(user);
             await _dbContext.SaveChangesAsync();
         }
+
+        public async Task DeleteUserAsync(Guid id)
+        {
+            var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == id);
+
+            if (user == null)
+            {
+                throw new Exception("User not found");
+            }
+
+            // Soft delete by setting Isactive to false
+            user.Isactive = false;
+            
+            _dbContext.Users.Update(user);
+            await _dbContext.SaveChangesAsync();
+        }
     }
 }

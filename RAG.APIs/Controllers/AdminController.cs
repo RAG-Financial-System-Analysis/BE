@@ -14,10 +14,12 @@ namespace RAG.APIs.Controllers
     public class AdminController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly IAdminService _adminService;
 
-        public AdminController(IUserService userService)
+        public AdminController(IUserService userService, IAdminService adminService)
         {
             _userService = userService;
+            _adminService = adminService;
         }
 
         [HttpGet("users")]
@@ -59,6 +61,54 @@ namespace RAG.APIs.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { Message = "An error occurred while updating the user.", Details = ex.Message });
+            }
+        }
+
+        [HttpDelete("users/{id}")]
+        public async Task<IActionResult> DeleteUser([FromRoute] Guid id)
+        {
+            try
+            {
+                await _userService.DeleteUserAsync(id);
+                return Ok(new { Message = "User deleted successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred while deleting the user.", Details = ex.Message });
+            }
+        }
+
+        [HttpGet("audit-logs")]
+        public async Task<IActionResult> GetAuditLogs(
+            [FromQuery] Guid? userId, 
+            [FromQuery] string? action, 
+            [FromQuery] DateTime? startDate, 
+            [FromQuery] DateTime? endDate, 
+            [FromQuery] int page = 1, 
+            [FromQuery] int pageSize = 50)
+        {
+            try
+            {
+                var response = await _adminService.GetAuditLogsAsync(userId, action ?? string.Empty, startDate, endDate, page, pageSize);
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred while retrieving audit logs.", Details = ex.Message });
+            }
+        }
+
+        [HttpGet("statistics")]
+        public async Task<IActionResult> GetSystemStatistics()
+        {
+            try
+            {
+                var response = await _adminService.GetSystemStatisticsAsync();
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred while retrieving system statistics.", Details = ex.Message });
             }
         }
     }
