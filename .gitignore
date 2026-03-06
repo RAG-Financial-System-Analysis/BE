@@ -446,10 +446,8 @@ Migrations/
 # AWS credentials (if stored locally)
 .aws/
 
-# Docker
-.dockerignore
-Dockerfile*
-docker-compose*
+# Docker (chỉ bỏ qua .dockerignore nếu muốn, Dockerfile và docker-compose cần commit)
+# .dockerignore
 
 # Kubernetes
 *.yaml

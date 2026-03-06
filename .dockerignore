@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+.github
+
+# Build output (sẽ được build bên trong container)
+**/bin/
+**/obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.csproj.user
+
+# Logs & temp
+*.log
+*.tmp
+
+# Docs
+README.md
+*.md
+
+# Environment files (không copy secret vào image)
+.env
+.env.*
+!.env.example
+
+# Docker files (không cần trong image)
+Dockerfile*
+docker-compose*
+.dockerignore
