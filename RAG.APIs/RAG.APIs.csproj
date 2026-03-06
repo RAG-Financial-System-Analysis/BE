@@ -6,7 +6,10 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="Amazon.Extensions.Configuration.SystemsManager" Version="7.1.0" />
+		<PackageReference Include="Amazon.Lambda.AspNetCoreServer.Hosting" Version="1.10.0" />
 		<PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.3.21" />
+		<PackageReference Include="AWSSDK.SecretsManager" Version="4.0.4.7" />
 		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.2" />
 
 		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
@@ -14,6 +17,7 @@
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 			<PrivateAssets>all</PrivateAssets>
 		</PackageReference>
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
 
 		<PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
 	</ItemGroup>

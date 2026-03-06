@@ -1,5 +1,5 @@
-﻿
-using Amazon.CognitoIdentityProvider;
+﻿using Amazon.CognitoIdentityProvider;
+using Amazon.Extensions.Configuration.SystemsManager;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using RAG.APIs.Infrastructure;
@@ -11,6 +11,16 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
 
+// 3. Tích hợp AWS Systems Manager (Lưu config)
+if (!builder.Environment.IsDevelopment())
+{
+    // You can set up the options to fetch parameters directly from SSM Parameter Store
+    builder.Configuration.AddSystemsManager(options =>
+    {
+        options.Path = "/RagSystem/Prod/"; // Tên đường dẫn config trên AWS Parameter Store
+        options.ReloadAfter = TimeSpan.FromMinutes(10);
+    });
+}
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -63,20 +73,30 @@ builder.Services.AddCors(options =>
         b.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
     });
 });
+//AWS Lambda
+builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
 var app = builder.Build();
 
 // Run Database Initializer
 await app.Services.UseDbInitializer();
 
-if (app.Environment.IsDevelopment())
+// 4. Swagger Configuration
+// Trên AWS Lambda API Gateway, môi trường thường là Production, nên ta mở luôn hoặc dùng cờ tự định nghĩa.
+// if (app.Environment.IsDevelopment() || app.Environment.IsProduction()) -> Tạm thời mở luôn cho dễ test
+app.UseSwagger(c => c.RouteTemplate = "swagger/{documentName}/swagger.json"); 
+
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger(); 
-    app.UseSwaggerUI(c =>
-    {
-        c.InjectStylesheet("/custom-swagger.css");
-    }); 
-}
+    c.InjectStylesheet("/custom-swagger.css");
+    
+    // Rất quan trọng cho API Gateway:
+    c.SwaggerEndpoint("v1/swagger.json", "RAG API V1");
+    // API Gateway thường chèn tên stage (VD: /Prod).
+    // Đặt Prefix rỗng hoặc theo stage để tránh lỗi 404 trang Swagger Not Found.
+    c.RoutePrefix = "swagger"; 
+}); 
+
 app.UseStaticFiles();
 app.UseCors("AllowAll");
 app.UseHttpsRedirection();
