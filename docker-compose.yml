@@ -1,0 +1,65 @@
+version: "3.9"
+
+services:
+  # ─────────────────────────────────────────────
+  # PostgreSQL Database
+  # ─────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: rag_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-RAG-System}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-123456}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      # Chạy script khởi tạo DB ngay khi container start lần đầu
+      - ./Database/scriptDB_final.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-RAG-System}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # ASP.NET Core Backend
+  # ─────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+
+      # Connection string trỏ sang service "db"
+      ConnectionStrings__DefaultConnection: >-
+        Host=db;Port=5432;Database=${DB_NAME:-RAG-System};
+        Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-123456}
+
+      # AWS
+      AWS__Region:       ${AWS_REGION:-ap-southeast-1}
+      AWS__UserPoolId:   ${AWS_USER_POOL_ID}
+      AWS__ClientId:     ${AWS_CLIENT_ID}
+      AWS__AccessKey:    ${AWS_ACCESS_KEY}
+      AWS__SecretKey:    ${AWS_SECRET_KEY}
+      AWS__Authority:    ${AWS_AUTHORITY}
+      AWS__S3BucketName: ${AWS_S3_BUCKET}
+
+      # OpenAI
+      OpenAI__ApiKey:    ${OPENAI_API_KEY}
+      OpenAI__Model:     ${OPENAI_MODEL:-gpt-4o-mini}
+      OpenAI__MaxToken:  ${OPENAI_MAX_TOKEN:-1000}
+
+volumes:
+  pg_data:
