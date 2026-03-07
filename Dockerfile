@@ -1,7 +1,7 @@
 # ============================================================
 # Stage 1: Build
 # ============================================================
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
 WORKDIR /src
 
 # Copy solution file & project files (tận dụng layer cache NuGet)
@@ -26,7 +26,7 @@ RUN dotnet publish RAG.APIs/RAG.APIs.csproj \
 # ============================================================
 # Stage 2: Runtime
 # ============================================================
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview AS runtime
 WORKDIR /app
 
 # Copy published output từ stage build

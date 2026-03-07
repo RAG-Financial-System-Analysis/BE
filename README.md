@@ -1,165 +1,160 @@
-# RAG System
+# 🚀 RAG System - Backend APIs
 
-A Retrieval-Augmented Generation (RAG) system built with .NET 10 and AWS Cognito authentication.
+![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?style=for-the-badge&logo=dotnet)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![AWS Cognito](https://img.shields.io/badge/AWS_Cognito-232F3E?style=for-the-badge&logo=amazon-aws&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)
+
+A robust Retrieval-Augmented Generation (RAG) system built with **.NET 10**, following Clean Architecture principles, utilizing Entity Framework Core with PostgreSQL, and integrated with AWS Cognito for secure authentication.
+
+---
+
+## 📑 Table of Contents
+- [Architecture](#️-architecture)
+- [Key Features](#-key-features)
+- [Technology Stack](#️-technology-stack)
+- [Project Structure](#-project-structure)
+- [Getting Started](#-getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Environment Variables](#environment-variables)
+  - [Run with Docker (Recommended)](#run-with-docker-recommended)
+  - [Run Locally](#run-locally)
+- [Database Migrations](#-database-migrations)
+- [API Documentation](#-api-documentation)
+- [Troubleshooting](#-troubleshooting)
+
+---
 
 ## 🏗️ Architecture
 
-This project follows Clean Architecture principles with the following layers:
+This project strictly adheres to **Clean Architecture** principles to separate concerns, ensuring testability, maintainability, and scalability.
 
-- **RAG.APIs** - Web API layer with controllers and endpoints
-- **RAG.Application** - Application services and interfaces
-- **RAG.Domain** - Domain entities, DTOs, and business logic
-- **RAG.Infrastructure** - Data access, external services, and AWS integrations
+- **`RAG.APIs`** `(Presentation Layer)`: RESTful API endpoints, Web API Controllers, and middleware configurations.
+- **`RAG.Application`** `(Use Case Layer)`: Business logic, interface definitions, Services, and CQRS/MediatR handlers (if any).
+- **`RAG.Domain`** `(Domain Layer)`: Core entities, Aggregates, Value Objects, exceptions, and Domain Events.
+- **`RAG.Infrastructure`** `(Infrastructure Layer)`: Database Context (EF Core), external service integrations (AWS Cognito, OpenAI, S3), and Repositories.
 
-## 🚀 Features
+---
 
-- **Authentication & Authorization**
-  - AWS Cognito integration for user management
-  - JWT token-based authentication
-  - User registration, login, and email verification
-  - Role-based access control
+## ✨ Key Features
 
-- **Database**
-  - PostgreSQL with Entity Framework Core
-  - User and Role management
-  - Database migrations support
+- **🔐 Authentication & Authorization**: Integrated securely with AWS Cognito, supporting JWT token-based authentication and Role-Based Access Control (RBAC).
+- **🤖 RAG Capabilities**: Integration with OpenAI to augment generation with specific context and data retrieval.
+- **🗄️ Robust Data Persistence**: Built on PostgreSQL + Entity Framework Core with database migration support.
+- **🐳 Containerized**: Fully Dockerized for seamless deployment (Backend + DB).
+
+---
 
 ## 🛠️ Technology Stack
 
-- **.NET 10** - Latest .NET framework
-- **ASP.NET Core Web API** - RESTful API development
-- **Entity Framework Core** - ORM for database operations
-- **PostgreSQL** - Primary database
-- **AWS Cognito** - Authentication and user management
-- **Swagger/OpenAPI** - API documentation
+| Category | Technology |
+| :--- | :--- |
+| **Framework** | .NET 10 (ASP.NET Core Web API) |
+| **Language** | C# 13+ |
+| **Database** | PostgreSQL 16 |
+| **ORM** | Entity Framework Core |
+| **Authentication** | AWS Cognito |
+| **AI / LLM** | OpenAI API |
+| **Containerization**| Docker & Docker Compose |
+| **Documentation** | Swagger / OpenAPI |
 
-## 📋 Prerequisites
+---
 
-- .NET 10 SDK
-- PostgreSQL database
-- AWS account with Cognito User Pool configured
-- Visual Studio 2022 or VS Code
+## 📁 Project Structure
 
-## ⚙️ Configuration
+```text
+RAG-System/
+├── Database/               # SQL Scripts & Database Initialization
+├── RAG.APIs/               # Startup project & API Endpoints
+├── RAG.Application/        # Application logic & interfaces
+├── RAG.Domain/             # Core models
+├── RAG.Infrastructure/     # EF Core, External APIs (AWS/OpenAI)
+├── docker-compose.yml      # Multi-container local orchestration
+├── Dockerfile              # Containerization instructions
+└── README.md               # You are here!
+```
 
-1. **Database Setup**
-   - Create a PostgreSQL database
-   - Update connection string in `appsettings.json`
-
-2. **AWS Cognito Setup**
-   - Create a Cognito User Pool
-   - Configure the following in `appsettings.json`:
-   ```json
-   {
-     "AWS": {
-       "UserPoolId": "your-user-pool-id",
-       "ClientId": "your-client-id",
-       "Region": "your-aws-region"
-     }
-   }
-   ```
-
-3. **Environment Variables**
-   - Set up your AWS credentials
-   - Configure database connection strings
+---
 
 ## 🚀 Getting Started
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd RAG-System
-   ```
+### Prerequisites
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [Docker & Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- Make sure ports `8080` (API) and `5432` (PostgreSQL) are free on your machine.
 
-2. **Restore dependencies**
-   ```bash
-   dotnet restore
-   ```
-
-3. **Update database**
-   ```bash
-   dotnet ef database update --project RAG.Infrastructure --startup-project RAG.APIs
-   ```
-
-4. **Run the application**
-   ```bash
-   dotnet run --project RAG.APIs
-   ```
-
-5. **Access the API**
-   - API: `https://localhost:7xxx`
-   - Swagger UI: `https://localhost:7xxx/swagger`
-
-## 📚 API Endpoints
-
-### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - User login
-- `POST /api/auth/verify-account` - Verify email with confirmation code
-
-## 🗄️ Database Schema
-
-### Users Table
-- `Id` (UUID) - Primary key
-- `CognitoSub` (string) - AWS Cognito user identifier
-- `Email` (string) - User email address
-- `FullName` (string) - User's full name
-- `RoleId` (UUID) - Foreign key to Roles table
-
-### Roles Table
-- `Id` (UUID) - Primary key
-- `Name` (string) - Role name
-
-## 🔧 Development
-
-### Running Migrations
+### Environment Variables
+Create a `.env` file in the root directory by copying `.env.example`:
 ```bash
-# Add new migration
-dotnet ef migrations add MigrationName --project RAG.Infrastructure --startup-project RAG.APIs
+cp .env.example .env
+```
+Fill in the necessary keys (AWS credentials, OpenAI API Key, Database credentials) in the `.env` file before running the application.
 
-# Update database
+### Run with Docker (Recommended)
+This will spin up both the **PostgreSQL Database** and the **ASP.NET Core Backend**.
+
+```bash
+# Build and start the containers in detached mode
+docker-compose up -d --build
+
+# View logs
+docker-compose logs -f backend
+```
+> **Note:** The database will be seeded automatically via scripts in `Database/scriptDB_final.sql`.
+> Swagger will be available at: http://localhost:8080/swagger
+
+### Run Locally
+If you prefer to run it locally via Visual Studio or CLI:
+
+1. **Setup DB:** Spin up a local PostgreSQL instance or run just the DB from docker-compose (`docker-compose up -d db`).
+2. **Update Connection String:** Ensure `appsettings.Development.json` has the correct `ConnectionStrings__DefaultConnection`.
+3. **Restore & Run:**
+   ```bash
+   dotnet restore RAG-System.slnx
+   dotnet run --project RAG.APIs/RAG.APIs.csproj
+   ```
+
+---
+
+## ⚙️ Database Migrations
+
+During development, if you change Domain entities and need to update the database schema, run the following EF Core CLI commands:
+
+```bash
+# Generate a new migration
+dotnet ef migrations add <MigrationName> --project RAG.Infrastructure --startup-project RAG.APIs
+
+# Apply migrations to the database
 dotnet ef database update --project RAG.Infrastructure --startup-project RAG.APIs
 ```
 
-### Project Structure
-```
-RAG-System/
-├── RAG.APIs/           # Web API layer
-├── RAG.Application/    # Application services
-├── RAG.Domain/         # Domain entities and DTOs
-├── RAG.Infrastructure/ # Data access and external services
-└── Database/           # Database scripts
-```
+---
 
-## 🤝 Contributing
+## 📚 API Documentation
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+Once the project is running, you can access the interactive API interface provided by **Swagger**:
 
-## 📝 License
+- **Local Development URL**: `https://localhost:<port>/swagger` or `http://localhost:<port>/swagger`
+- **Docker URL**: `http://localhost:8080/swagger`
 
-This project is licensed under the MIT License.
+The Swagger UI provides documentation for authentication endpoints (`/api/auth/*`) and other RAG functionality. Ensure you pass your JWT Token in the `Authorize` section if the endpoint requires authentication.
+
+---
 
 ## 🐛 Troubleshooting
 
-### Common Issues
+1. **Database Connection Issues (`Connection Refused`)**
+   - If using `docker-compose`, ensure the `db` container is fully spun up before the `backend` container tries to connect.
+   - Verify `ConnectionStrings` in `.env` matches your postgres credentials.
 
-1. **Database Connection Issues**
-   - Verify PostgreSQL is running
-   - Check connection string in `appsettings.json`
+2. **AWS Cognito Unauthorized Errors**
+   - Check if `AWS__UserPoolId` and `AWS__ClientId` are valid in your `.env` or `appsettings.json`.
+   - Ensure you are passing a valid `Bearer <TOKEN>` in Swagger.
 
-2. **AWS Cognito Issues**
-   - Ensure AWS credentials are configured
-   - Verify User Pool and Client ID settings
-   - Check AWS region configuration
+3. **OpenAI API Key Errors**
+   - Ensure `OPENAI_API_KEY` is not empty and has enough quota.
 
-3. **Migration Issues**
-   - Ensure database exists
-   - Run migrations from the correct directory
-   - Check Entity Framework tools are installed
+---
 
-## 📞 Support
-
-For support and questions, please create an issue in the repository.
+> Maintainer: RAG System Team
