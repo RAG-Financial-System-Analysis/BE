@@ -155,6 +155,8 @@ The Swagger UI provides documentation for authentication endpoints (`/api/auth/*
 3. **OpenAI API Key Errors**
    - Ensure `OPENAI_API_KEY` is not empty and has enough quota.
 
----
+## 👨‍💻 Author
 
-> Maintainer: RAG System Team
+- **Name:** Nguyễn Hoàng Nam
+- **Email:** nemnguyenhoang2907@gmail.com
+- **Facebook:** [https://www.facebook.com/Nemsadboiz2907](https://www.facebook.com/Nemsadboiz2907)
