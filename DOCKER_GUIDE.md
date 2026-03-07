@@ -6,10 +6,10 @@
 
 ## ✅ Yêu cầu
 
-| Công cụ | Phiên bản tối thiểu | Link tải |
-|---------|-------------------|----------|
-| Docker Desktop | 4.x | [docker.com/get-started](https://www.docker.com/get-started/) |
-| Git | bất kỳ | [git-scm.com](https://git-scm.com/) |
+| Công cụ        | Phiên bản tối thiểu | Link tải                                                      |
+| -------------- | ------------------- | ------------------------------------------------------------- |
+| Docker Desktop | 4.x                 | [docker.com/get-started](https://www.docker.com/get-started/) |
+| Git            | bất kỳ              | [git-scm.com](https://git-scm.com/)                           |
 
 ---
 
@@ -79,10 +79,10 @@ rag_backend    running             0.0.0.0:8080->8080/tcp
 
 ## 🌐 Truy cập API
 
-| Endpoint | URL |
-|----------|-----|
-| **Swagger UI** | http://localhost:8080/swagger |
-| **API Base URL** | http://localhost:8080 |
+| Endpoint         | URL                           |
+| ---------------- | ----------------------------- |
+| **Swagger UI**   | http://localhost:8080/swagger |
+| **API Base URL** | http://localhost:8080         |
 
 Cấu hình base URL trong frontend:
 
@@ -91,6 +91,53 @@ VITE_API_URL=http://localhost:8080
 # hoặc
 REACT_APP_API_URL=http://localhost:8080
 ```
+
+---
+
+## 📱 Khi BE team gửi file appsettings
+
+### Vấn đề
+Khi FE team clone code BE về, sẽ **không có** 2 files:
+- `appsettings.json`
+- `appsettings.Development.json`
+
+BE team sẽ gửi riêng 2 files này qua email/chat.
+
+### 📁 **Đặt 2 files ở đâu:**
+
+```
+RAG.APIs/
+├── Controllers/
+├── Properties/
+├── appsettings.json              ← Đặt file này ở đây
+├── appsettings.Development.json  ← Đặt file này ở đây
+├── Program.cs
+└── RAG.APIs.csproj
+```
+
+**Đường dẫn đầy đủ:**
+- `D:\FPT\semester-7\SWD\code\TestDeployLambda\BE\RAG.APIs\appsettings.json`
+- `D:\FPT\semester-7\SWD\code\TestDeployLambda\BE\RAG.APIs\appsettings.Development.json`
+
+### ✅ **Sau khi đặt xong:**
+
+1. **Kiểm tra files đã có:**
+```bash
+ls RAG.APIs/appsettings*.json
+```
+
+2. **Chạy Docker như bình thường:**
+```bash
+docker compose up --build -d
+```
+
+3. **Truy cập Swagger:**
+- http://localhost:8080/swagger
+
+### 📋 **Lưu ý:**
+- ⚠️ **Không commit** 2 files này lên git
+- ✅ **Chỉ cần đặt đúng vị trí** là Docker sẽ tự động sử dụng
+- ✅ **Không cần sửa gì** trong files này
 
 ---
 

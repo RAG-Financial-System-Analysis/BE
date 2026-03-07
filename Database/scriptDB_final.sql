@@ -430,7 +430,7 @@ RETURNS TABLE (
     Period VARCHAR(10),
     Relevance REAL,
     Snippet TEXT
-) AS $
+) AS $$
 BEGIN
     RETURN QUERY
     SELECT 
@@ -460,7 +460,7 @@ BEGIN
     ORDER BY relevance DESC
     LIMIT limit_count;
 END;
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 -- Function: Check user permission on report
 CREATE OR REPLACE FUNCTION Can_Access_Report(
@@ -468,7 +468,7 @@ CREATE OR REPLACE FUNCTION Can_Access_Report(
     user_id_param UUID,
     user_role_param TEXT
 )
-RETURNS BOOLEAN AS $
+RETURNS BOOLEAN AS $$
 DECLARE
     report_visibility TEXT;
     report_owner UUID;
@@ -499,18 +499,18 @@ BEGIN
     
     RETURN FALSE;
 END;
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 -- Function: Update LastMessageAt in Chat_Sessions
 CREATE OR REPLACE FUNCTION Update_Chat_Session_Timestamp()
-RETURNS TRIGGER AS $
+RETURNS TRIGGER AS $$
 BEGIN
     UPDATE Chat_Sessions
     SET LastMessageAt = NEW.CreatedAt
     WHERE Id = NEW.SessionId;
     RETURN NEW;
 END;
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_update_chat_timestamp
 AFTER INSERT ON Question_Prompt
