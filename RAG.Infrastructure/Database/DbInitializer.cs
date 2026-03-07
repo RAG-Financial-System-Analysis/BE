@@ -59,7 +59,27 @@ namespace RAG.Infrastructure.Database
             }
             await _context.SaveChangesAsync();
 
-            // 2. Define default users
+            // 2. Ensure Analytics Types exist
+            var analyticsTypes = new List<AnalyticsType>
+            {
+                new AnalyticsType { Id = Guid.NewGuid(), Code = "RISK", Name = "Risk Analysis", Description = "Phân tích rủi ro tài chính", Createdat = DateTime.Now },
+                new AnalyticsType { Id = Guid.NewGuid(), Code = "TREND", Name = "Trend Analysis", Description = "Phân tích xu hướng phát triển", Createdat = DateTime.Now },
+                new AnalyticsType { Id = Guid.NewGuid(), Code = "COMPARISON", Name = "Comparative Analysis", Description = "So sánh giữa các công ty", Createdat = DateTime.Now },
+                new AnalyticsType { Id = Guid.NewGuid(), Code = "OPPORTUNITY", Name = "Opportunity Analysis", Description = "Phân tích cơ hội đầu tư", Createdat = DateTime.Now },
+                new AnalyticsType { Id = Guid.NewGuid(), Code = "EXECUTIVE", Name = "Executive Summary", Description = "Tóm tắt tổng quan", Createdat = DateTime.Now }
+            };
+
+            foreach (var analyticsType in analyticsTypes)
+            {
+                if (!await _context.AnalyticsTypes.AnyAsync(at => at.Code == analyticsType.Code))
+                {
+                    await _context.AnalyticsTypes.AddAsync(analyticsType);
+                    _logger.LogInformation($"Analytics Type '{analyticsType.Code}' - '{analyticsType.Name}' seeded to database.");
+                }
+            }
+            await _context.SaveChangesAsync();
+
+            // 3. Define default users
             var defaultUsers = new[]
             {
                 new { Email = _configuration["AdminUser:Email"] ?? "admin@rag.com", Password = _configuration["AdminUser:Password"] ?? "Admin@123!!", FullName = _configuration["AdminUser:FullName"] ?? "System Admin", Role = SystemRoles.Admin },
