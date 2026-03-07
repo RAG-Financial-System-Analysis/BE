@@ -2,6 +2,7 @@
 # Stage 1: Build
 # ============================================================
 FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
+ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
 # Copy solution file & project files (tận dụng layer cache NuGet)
@@ -19,8 +20,9 @@ COPY . .
 
 # Publish release build
 RUN dotnet publish RAG.APIs/RAG.APIs.csproj \
-    -c Release \
+    -c $BUILD_CONFIGURATION \
     -o /app/publish \
+    /p:UseAppHost=false \
     --no-restore
 
 # ============================================================
@@ -29,13 +31,17 @@ RUN dotnet publish RAG.APIs/RAG.APIs.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview AS runtime
 WORKDIR /app
 
-# Copy published output từ stage build
-COPY --from=build /app/publish .
+# Run as non-root user for security
+USER app
 
-# Expose port HTTP mặc định
+# Expose default HTTP port
 EXPOSE 8080
 
+# Environment variables
 ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
+
+# Copy published output from build stage
+COPY --from=build /app/publish .
 
 ENTRYPOINT ["dotnet", "RAG.APIs.dll"]
