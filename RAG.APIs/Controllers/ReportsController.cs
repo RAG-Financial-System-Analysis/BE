@@ -25,7 +25,7 @@ namespace RAG.APIs.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdClaim = User.FindFirst("internal_user_id")?.Value;
                 if (string.IsNullOrEmpty(userIdClaim))
                 {
                     return Unauthorized("User is not authenticated or Sub is missing.");
@@ -57,7 +57,7 @@ namespace RAG.APIs.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdClaim = User.FindFirst("internal_user_id")?.Value;
                 if (string.IsNullOrEmpty(userIdClaim))
                 {
                     return Unauthorized("User is not authenticated or Sub is missing.");
@@ -99,7 +99,7 @@ namespace RAG.APIs.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdClaim = User.FindFirst("internal_user_id")?.Value;
                 var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
 
                 if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out Guid internalUserId))
@@ -129,7 +129,7 @@ namespace RAG.APIs.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdClaim = User.FindFirst("internal_user_id")?.Value;
                 var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
 
                 if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out Guid internalUserId))
@@ -172,7 +172,7 @@ namespace RAG.APIs.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdClaim = User.FindFirst("internal_user_id")?.Value;
                 var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
 
                 if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out Guid internalUserId))
@@ -207,7 +207,7 @@ namespace RAG.APIs.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdClaim = User.FindFirst("internal_user_id")?.Value;
                 var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
 
                 if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out Guid internalUserId))
@@ -237,7 +237,7 @@ namespace RAG.APIs.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdClaim = User.FindFirst("internal_user_id")?.Value;
                 var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
 
                 if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out Guid internalUserId))
@@ -264,7 +264,7 @@ namespace RAG.APIs.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdClaim = User.FindFirst("internal_user_id")?.Value;
                 var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
 
                 if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out Guid internalUserId))

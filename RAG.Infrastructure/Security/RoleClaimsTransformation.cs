@@ -34,17 +34,24 @@ namespace RAG.Infrastructure.Security
 
             var cognitoSub = subClaim.Value;
 
-            var userRole = await _context.Users
+            var user = await _context.Users
                 .AsNoTracking()
-                .Include(u => u.Role) 
+                .Include(u => u.Role)
                 .Where(u => u.Cognitosub == cognitoSub)
-                .Select(u => u.Role.Name) 
+                .Select(u => new { u.Id, RoleName = u.Role.Name })
                 .FirstOrDefaultAsync();
-            if (!string.IsNullOrEmpty(userRole))
+
+            if (user != null)
             {
-                if (!principal.HasClaim(c => c.Type == ClaimTypes.Role))
+                if (!string.IsNullOrEmpty(user.RoleName) && !principal.HasClaim(c => c.Type == ClaimTypes.Role))
                 {
-                    identity.AddClaim(new Claim(ClaimTypes.Role, userRole));
+                    identity.AddClaim(new Claim(ClaimTypes.Role, user.RoleName));
+                }
+
+                // Inject internal DB user Id so controllers can use it for FK references
+                if (!principal.HasClaim(c => c.Type == "internal_user_id"))
+                {
+                    identity.AddClaim(new Claim("internal_user_id", user.Id.ToString()));
                 }
             }
             return principal;

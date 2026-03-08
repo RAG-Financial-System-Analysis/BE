@@ -67,7 +67,7 @@ namespace RAG.Infrastructure.Services
                 Fileurl = fileUrl,
                 Generationtype = "auto",
                 Generatedby = userId,
-                Createdat = DateTime.UtcNow
+                Createdat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified)
             };
 
             _dbContext.AnalyticsReports.Add(report);

@@ -92,7 +92,7 @@ namespace RAG.Infrastructure.Services
             var chatsQuery = _dbContext.ChatSessions.AsNoTracking();
             var totalChats = await chatsQuery.CountAsync();
             
-            var today = DateTime.UtcNow.Date;
+            var today = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Unspecified);
             var activeTodayChats = await chatsQuery.CountAsync(c => c.Createdat >= today);
 
             // 4. Storage Statistics

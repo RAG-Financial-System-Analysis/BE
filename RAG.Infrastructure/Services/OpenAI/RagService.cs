@@ -54,7 +54,7 @@ namespace RAG.Infrastructure.Services
                     Responsetext = "Xin lỗi, tôi không tìm thấy thông tin liên quan trong cơ sở dữ liệu.",
                     Generationmodel = "N/A",
                     Retrievalcount = 0,
-                    Createdat = DateTime.UtcNow
+                    Createdat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified)
                 };
 
                 await _dbContext.QuestionPrompts.AddAsync(emptyPrompt);
@@ -81,14 +81,14 @@ namespace RAG.Infrastructure.Services
                 Responsetext = answer,
                 Generationmodel = modelToUse,
                 Retrievalcount = relevantDocs.Count,
-                Createdat = DateTime.UtcNow
+                Createdat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified)
             };
 
             await _dbContext.QuestionPrompts.AddAsync(prompt);
             await _dbContext.SaveChangesAsync();
 
             // Cập nhật Update time cho Session
-            session.Lastmessageat = DateTime.UtcNow;
+            session.Lastmessageat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
 
             // Optional: Lưu Citation mapped vào PromptRatiovalue/PromptAnalytic nếu cần
             // Build citations response
