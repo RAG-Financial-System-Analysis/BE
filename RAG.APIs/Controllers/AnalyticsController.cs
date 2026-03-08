@@ -40,7 +40,7 @@ namespace RAG.APIs.Controllers
         {
             try
             {
-                var userIdString = User.FindFirst("sub")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var userIdString = User.FindFirst("internal_user_id")?.Value;
                 if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out Guid userId))
                 {
                     return Unauthorized(new { Message = "Invalid or missing user ID in token." });

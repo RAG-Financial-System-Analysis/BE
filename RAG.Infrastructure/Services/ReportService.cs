@@ -106,8 +106,8 @@ namespace RAG.Infrastructure.Services
                     Fileurl = fileUrl,
                     Contentraw = extractionResult.Text,
                     Visibility = string.IsNullOrEmpty(request.Visibility) ? "private" : request.Visibility,
-                    Createdat = DateTime.Now,
-                    Updatedat = DateTime.Now
+                    Createdat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified),
+                    Updatedat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified)
                 };
 
                 await _context.ReportFinancials.AddAsync(reportFinancial);
@@ -132,7 +132,7 @@ namespace RAG.Infrastructure.Services
                                 Reportid = reportFinancial.Id,
                                 Definitionid = defId,
                                 Value = metric.Value,
-                                Createdat = DateTime.Now
+                                Createdat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified)
                             };
                             await _context.RatioValues.AddAsync(ratioValue);
 
@@ -348,7 +348,7 @@ namespace RAG.Infrastructure.Services
             }
 
             report.Visibility = visibility.ToLower();
-            report.Updatedat = DateTime.Now;
+            report.Updatedat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
 
             _context.ReportFinancials.Update(report);
             await _context.SaveChangesAsync();
