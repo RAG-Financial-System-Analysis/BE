@@ -176,5 +176,66 @@ namespace RAG.Infrastructure.Services
                 Data = data
             };
         }
+
+        public async Task<GetReportCategoryByIdResponse> GetReportCategoryByIdAsync(Guid id)
+        {
+            var category = await _dbContext.ReportCategories
+                .AsNoTracking()
+                .Include(c => c.ReportFinancials)
+                    .ThenInclude(r => r.Company)
+                .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (category == null)
+                throw new KeyNotFoundException("Report category not found");
+
+            return new GetReportCategoryByIdResponse
+            {
+                Id = category.Id,
+                Name = category.Name,
+                Description = category.Description,
+                AssociatedReportsCount = category.ReportFinancials.Count,
+                AssociatedReports = category.ReportFinancials.Select(r => new AssociatedReportDto
+                {
+                    Id = r.Id,
+                    Title = r.Filename ?? $"{r.Company.Name} {r.Period}/{r.Year}",
+                    CompanyName = r.Company.Name ?? string.Empty,
+                    CreatedAt = r.Createdat
+                }).ToList()
+            };
+        }
+
+        public async Task UpdateReportCategoryAsync(Guid id, UpdateReportCategoryRequest request)
+        {
+            var category = await _dbContext.ReportCategories.FindAsync(id);
+            if (category == null)
+                throw new KeyNotFoundException("Report category not found");
+
+            var nameExists = await _dbContext.ReportCategories
+                .AnyAsync(c => c.Name == request.Name && c.Id != id);
+            if (nameExists)
+                throw new ArgumentException("Name already exists");
+
+            category.Name = request.Name;
+            category.Description = request.Description;
+
+            _dbContext.ReportCategories.Update(category);
+            await _dbContext.SaveChangesAsync();
+        }
+
+        public async Task DeleteReportCategoryAsync(Guid id)
+        {
+            var category = await _dbContext.ReportCategories
+                .Include(c => c.ReportFinancials)
+                .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (category == null)
+                throw new KeyNotFoundException("Report category not found");
+
+            if (category.ReportFinancials.Any())
+                throw new InvalidOperationException("Cannot delete report category because it has associated financial reports");
+
+            _dbContext.ReportCategories.Remove(category);
+            await _dbContext.SaveChangesAsync();
+        }
     }
 }

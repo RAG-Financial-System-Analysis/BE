@@ -11,5 +11,8 @@ namespace RAG.Application.Interfaces
         Task<SystemStatisticsResponse> GetSystemStatisticsAsync();
         Task<CreateReportCategoriesResponse> CreateReportCategoryAsync(CreateReportCategoriesRequest request);
         Task<GetReportCategoriesResponse> GetReportCategoriesAsync(int page, int pageSize);
+        Task<GetReportCategoryByIdResponse> GetReportCategoryByIdAsync(Guid id);
+        Task UpdateReportCategoryAsync(Guid id, UpdateReportCategoryRequest request);
+        Task DeleteReportCategoryAsync(Guid id);
     }
 }

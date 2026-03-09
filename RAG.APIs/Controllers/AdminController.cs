@@ -142,5 +142,67 @@ namespace RAG.APIs.Controllers
                 return StatusCode(500, new { Message = "An error occurred while retrieving report categories.", Details = ex.Message });
             }
         }
+
+        [HttpGet("report-categories/{id}")]
+        public async Task<IActionResult> GetReportCategoryById([FromRoute] Guid id)
+        {
+            try
+            {
+                var response = await _adminService.GetReportCategoryByIdAsync(id);
+                return Ok(response);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred while retrieving the report category.", Details = ex.Message });
+            }
+        }
+
+        [HttpPut("report-categories/{id}")]
+        public async Task<IActionResult> UpdateReportCategory([FromRoute] Guid id, [FromBody] UpdateReportCategoryRequest request)
+        {
+            try
+            {
+                await _adminService.UpdateReportCategoryAsync(id, request);
+                return Ok(new { Message = "Report category updated successfully" });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred while updating the report category.", Details = ex.Message });
+            }
+        }
+
+        [HttpDelete("report-categories/{id}")]
+        public async Task<IActionResult> DeleteReportCategory([FromRoute] Guid id)
+        {
+            try
+            {
+                await _adminService.DeleteReportCategoryAsync(id);
+                return Ok(new { Message = "Report category deleted successfully" });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred while deleting the report category.", Details = ex.Message });
+            }
+        }
     }
 }
