@@ -1,9 +1,35 @@
-# Hướng Dẫn Tích Hợp Scripts Deployment cho RAG System
+# Hướng Dẫn Deployment cho RAG System - Simplified Architecture
 
-## 🏗️ Cấu Trúc Dự Án Hiện Tại
+## 🏗️ Kiến Trúc Deployment Đơn Giản
+
+### Không Sử Dụng VPC
+Scripts đã được tối ưu để **KHÔNG sử dụng VPC** nhằm:
+- ✅ Đơn giản hóa deployment
+- ✅ Lambda có thể truy cập trực tiếp Cognito và external APIs
+- ✅ Frontend có thể truy cập RDS public endpoint
+- ✅ Giảm chi phí (không cần NAT Gateway)
+- ✅ Tăng tốc cold start của Lambda
+
+### Kiến Trúc Hệ Thống
+```
+Internet
+    ↓
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Frontend      │────│   Lambda API     │────│   RDS Public    │
+│   (React/Vue)   │    │   (No VPC)       │    │   (PostgreSQL)  │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                              │
+                              ↓
+                       ┌──────────────────┐
+                       │   AWS Cognito    │
+                       │   (User Auth)    │
+                       └──────────────────┘
+```
+
+## 📁 Cấu Trúc Dự Án
 
 ```
-BE copy/
+BE/
 ├── RAG.APIs/              # Main API project (Lambda entry point)
 ├── RAG.Application/       # Application layer
 ├── RAG.Domain/           # Domain layer  
@@ -11,27 +37,19 @@ BE copy/
 ├── Database/             # Database scripts
 ├── appsettings.json      # Configuration
 ├── RAG-System.slnx       # Solution file
-└── scripts/              # 👈 Đặt folder scripts ở đây
+└── scripts/              # Deployment scripts
+    ├── infrastructure/   # AWS resource provisioning
+    ├── deployment/       # Application deployment
+    ├── migration/        # Database migrations
+    └── utilities/        # Helper scripts
 ```
 
-## 📁 Cách Tích Hợp Scripts
+## 📋 Cấu Hình Deployment
 
-### Bước 1: Copy Scripts vào Dự Án
-```bash
-# Từ thư mục gốc (SWD/)
-cp -r scripts/ "code/TestDeployLambda/BE copy/"
-
-# Hoặc trên Windows
-xcopy scripts "code\TestDeployLambda\BE copy\scripts" /E /I
-```
-
-### Bước 2: Cấu Hình Scripts cho Dự Án RAG
-
-Tạo file cấu hình deployment:
-
+### Tạo File Cấu Hình
 ```bash
 # Tạo file config deployment
-cat > "code/TestDeployLambda/BE copy/deployment-config.env" << EOF
+cat > deployment-config.env << EOF
 # RAG System Deployment Configuration
 PROJECT_NAME="rag-system"
 SOLUTION_FILE="RAG-System.slnx"
@@ -42,267 +60,295 @@ APPSETTINGS_FILE="RAG.APIs/appsettings.json"
 
 # AWS Configuration
 AWS_REGION="ap-southeast-1"
-LAMBDA_RUNTIME="dotnet10"
+LAMBDA_RUNTIME="dotnet8"
 LAMBDA_MEMORY="1024"
 LAMBDA_TIMEOUT="30"
 
-# Database Configuration  
+# Database Configuration (Public Access)
 DB_ENGINE="postgres"
-DB_VERSION="16.4"
+DB_VERSION="16.13"
 DB_INSTANCE_CLASS="db.t3.micro"
-DB_NAME="RAG-System"
+DB_NAME="appdb"
+DB_PUBLIC_ACCESS="true"
 EOF
 ```
 
-## 🚀 Cách Sử Dụng với Dự Án RAG
-
-### Thiết Lập Ban Đầu
-
+### Cấu Hình AWS CLI
 ```bash
-# 1. Di chuyển vào thư mục dự án
-cd "code/TestDeployLambda/BE copy"
+# Cấu hình AWS credentials
+aws configure
+# AWS Access Key ID: [Your Access Key]
+# AWS Secret Access Key: [Your Secret Key]  
+# Default region name: ap-southeast-1
+# Default output format: json
 
-# 2. Load configuration
-source deployment-config.env
+# Hoặc sử dụng profile
+aws configure --profile rag-system
+export AWS_PROFILE=rag-system
+```
 
-# 3. Validate AWS setup
+## 🚀 Deployment Commands
+
+### 1. Thiết Lập Ban Đầu
+```bash
+# Validate AWS setup
 ./scripts/utilities/validate-aws-cli.sh
 
-# 4. Test build dự án
+# Test build dự án
 dotnet build RAG-System.slnx
 ```
 
-### Deploy Lần Đầu (Initial Deployment)
-
+### 2. Deploy Infrastructure (Lần Đầu)
 ```bash
-# Deploy toàn bộ infrastructure + application
+# Deploy RDS PostgreSQL (Public Access)
+./scripts/infrastructure/provision-rds.sh \
+  --environment production \
+  --project-name rag-system \
+  --instance-class db.t3.micro \
+  --storage 20
+
+# Deploy Lambda Function (No VPC)
+./scripts/infrastructure/provision-lambda.sh \
+  --environment production \
+  --project-name rag-system \
+  --memory 1024 \
+  --timeout 30
+```
+
+### 3. Deploy Application Code
+```bash
+# Full deployment (infrastructure + application)
 ./scripts/deploy.sh \
   --mode initial \
   --environment production \
   --project-name rag-system \
   --aws-region ap-southeast-1
 
-# Hoặc deploy staging trước
-./scripts/deploy.sh \
-  --mode initial \
-  --environment staging \
-  --project-name rag-system-staging \
-  --aws-region ap-southeast-1
-```
-
-### Cập Nhật Code (Update Deployment)
-
-```bash
-# Sau khi có code mới
-git pull origin main
-
-# Build và test local
-dotnet build RAG-System.slnx
-dotnet test  # nếu có tests
-
-# Deploy code mới
+# Update deployment (code only)
 ./scripts/deploy.sh \
   --mode update \
   --environment production \
   --project-name rag-system
 ```
 
-### Database Migrations
-
+### 4. Database Setup
 ```bash
-# Tạo migration mới (trong RAG.Infrastructure)
-cd RAG.Infrastructure
-dotnet ef migrations add NewFeatureMigration --startup-project ../RAG.APIs
+# Run migrations
+./scripts/migration/run-migrations.sh \
+  --environment production
 
-# Deploy với migration
-cd ..
-./scripts/deploy.sh --mode update --environment staging --project-name rag-system-staging
+# Seed initial data (if needed)
+./scripts/migration/seed-data.sh \
+  --environment production
 ```
 
-## 🔧 Tùy Chỉnh Scripts cho RAG System
+## 🔧 Lợi Ích Của Kiến Trúc Không VPC
 
-### 1. Cập Nhật Lambda Deployment Script
+### RDS Public Access
+- ✅ Frontend có thể kết nối trực tiếp từ browser (với CORS)
+- ✅ Developers có thể kết nối từ local development
+- ✅ Không cần bastion host hoặc VPN
+- ✅ Đơn giản hóa network configuration
 
-Tạo file override cho Lambda deployment:
+### Lambda No VPC
+- ✅ Cold start nhanh hơn (không có VPC overhead)
+- ✅ Truy cập trực tiếp AWS services (Cognito, S3, etc.)
+- ✅ Có thể gọi external APIs mà không cần NAT Gateway
+- ✅ Giảm complexity và cost
 
-```bash
-cat > scripts/deployment/deploy-lambda-rag.sh << 'EOF'
-#!/bin/bash
-# Custom Lambda deployment for RAG System
+### Security Considerations
+- 🔒 RDS security group chỉ mở port 5432
+- 🔒 Strong password generation và SSL required
+- 🔒 Lambda IAM role với least privilege
+- 🔒 Cognito authentication cho API access
 
-set -euo pipefail
+## 🔍 Connection Strings và Configuration
 
-# Source utilities
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$SCRIPT_DIR/utilities/logging.sh"
-source "$SCRIPT_DIR/utilities/error-handling.sh"
-
-# RAG-specific configuration
-SOLUTION_FILE="RAG-System.slnx"
-MAIN_PROJECT="RAG.APIs"
-OUTPUT_DIR="publish"
-
-deploy_rag_lambda() {
-    local function_name="$1"
-    local environment="$2"
-    
-    log_info "Building RAG System for Lambda deployment..."
-    
-    # Clean previous builds
-    rm -rf "$OUTPUT_DIR"
-    
-    # Build and publish
-    dotnet publish "$MAIN_PROJECT" \
-        --configuration Release \
-        --runtime linux-x64 \
-        --self-contained false \
-        --output "$OUTPUT_DIR" \
-        /p:PublishReadyToRun=true
-    
-    # Create deployment package
-    cd "$OUTPUT_DIR"
-    zip -r "../rag-system-deployment.zip" .
-    cd ..
-    
-    # Deploy to Lambda
-    aws lambda update-function-code \
-        --function-name "$function_name" \
-        --zip-file "fileb://rag-system-deployment.zip"
-    
-    log_success "RAG System deployed to Lambda: $function_name"
+### Database Connection String
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=<RDS_ENDPOINT>;Database=appdb;Username=dbadmin;Password=<PASSWORD>;Port=5432;SSL Mode=Require;"
+  },
+  "AWS": {
+    "Region": "ap-southeast-1",
+    "Cognito": {
+      "UserPoolId": "<USER_POOL_ID>",
+      "ClientId": "<CLIENT_ID>"
+    }
+  }
 }
-
-# Execute if called directly
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    deploy_rag_lambda "$@"
-fi
-EOF
-
-chmod +x scripts/deployment/deploy-lambda-rag.sh
 ```
 
-### 2. Cập Nhật Database Migration Script
+### Frontend Configuration
+```javascript
+// Frontend có thể kết nối trực tiếp RDS (nếu cần)
+const dbConfig = {
+  host: '<RDS_ENDPOINT>',
+  database: 'appdb',
+  port: 5432,
+  ssl: { rejectUnauthorized: false }
+};
 
-```bash
-cat > scripts/migration/run-migrations-rag.sh << 'EOF'
-#!/bin/bash
-# Custom migration runner for RAG System
-
-set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$SCRIPT_DIR/utilities/logging.sh"
-
-run_rag_migrations() {
-    local connection_string="$1"
-    
-    log_info "Running RAG System migrations..."
-    
-    # Run EF migrations from Infrastructure project
-    cd RAG.Infrastructure
-    
-    dotnet ef database update \
-        --startup-project ../RAG.APIs \
-        --connection "$connection_string"
-    
-    cd ..
-    
-    log_success "RAG System migrations completed"
-}
-
-# Execute if called directly  
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    run_rag_migrations "$@"
-fi
-EOF
-
-chmod +x scripts/migration/run-migrations-rag.sh
+// Lambda API endpoint
+const apiEndpoint = 'https://<LAMBDA_FUNCTION_URL>';
 ```
 
-## 📋 Workflow Deployment cho RAG System
+## 📋 Deployment Workflow
 
-### Development Workflow
+### Development → Staging → Production
 ```bash
-# 1. Develop locally
+# 1. Development (Local)
 dotnet run --project RAG.APIs
+# Test với local database hoặc staging database
 
-# 2. Test với local database
-# (Sử dụng connection string trong appsettings.Development.json)
+# 2. Deploy to Staging
+./scripts/deploy.sh --mode initial --environment staging --project-name rag-system-staging
 
-# 3. Deploy lên staging
+# 3. Test Staging
+curl https://<staging-lambda-url>/swagger
+# Test all API endpoints
+
+# 4. Deploy to Production  
+./scripts/deploy.sh --mode initial --environment production --project-name rag-system
+
+# 5. Verify Production
+curl https://<production-lambda-url>/health
+```
+
+### Update Workflow
+```bash
+# 1. Code changes
+git pull origin main
+
+# 2. Build and test
+dotnet build RAG-System.slnx
+
+# 3. Update staging
 ./scripts/deploy.sh --mode update --environment staging --project-name rag-system-staging
 
-# 4. Test trên staging
-curl https://your-staging-api.amazonaws.com/swagger
+# 4. Test staging
+# Run integration tests
 
-# 5. Deploy lên production
+# 5. Update production
 ./scripts/deploy.sh --mode update --environment production --project-name rag-system
 ```
-
-### Production Deployment Checklist
-- [ ] Code đã được review và merge vào main branch
-- [ ] Tests đã pass (nếu có)
-- [ ] Database migrations đã được test trên staging
-- [ ] Backup database production (nếu cần)
-- [ ] Deploy lên staging và test trước
-- [ ] Deploy lên production
-- [ ] Verify API endpoints hoạt động
-- [ ] Check CloudWatch logs
 
 ## 🔍 Monitoring và Troubleshooting
 
 ### Xem Logs
 ```bash
-# Logs deployment
-cat deployment.log
+# Deployment logs (organized in logs/ directory)
+ls -la logs/
+cat logs/deployment_*.log
 
-# Logs Lambda trên AWS
-aws logs tail /aws/lambda/rag-system-production --follow
+# Lambda logs trên AWS
+aws logs tail /aws/lambda/rag-system-production-api --follow
 
-# Logs RDS (nếu có)
-aws rds describe-db-log-files --db-instance-identifier rag-system-production
+# RDS logs
+aws rds describe-db-log-files --db-instance-identifier rag-system-production-db
 ```
 
-### Health Check
+### Health Check Scripts
 ```bash
-# Check infrastructure
-./scripts/utilities/check-infrastructure.sh --environment production --project-name rag-system
+# Check infrastructure status
+./scripts/utilities/check-infrastructure.sh \
+  --environment production \
+  --project-name rag-system
 
-# Test API endpoints
-curl https://your-api.amazonaws.com/swagger
-curl https://your-api.amazonaws.com/health  # nếu có health endpoint
+# Test database connectivity
+psql -h <RDS_ENDPOINT> -U dbadmin -d appdb -c "SELECT version();"
+
+# Test Lambda function
+aws lambda invoke \
+  --function-name rag-system-production-api \
+  --payload '{"test": "health-check"}' \
+  response.json
 ```
 
-### Common Issues
+### Common Issues và Solutions
 
-1. **Build Error**: 
-   ```bash
-   # Clean và rebuild
-   dotnet clean RAG-System.slnx
-   dotnet build RAG-System.slnx
-   ```
+#### 1. RDS Connection Issues
+```bash
+# Check security group
+aws ec2 describe-security-groups \
+  --filters "Name=group-name,Values=rag-system-production-rds-sg"
 
-2. **Migration Error**:
-   ```bash
-   # Check connection string
-   ./scripts/utilities/check-infrastructure.sh --environment production
-   
-   # Manual migration
-   cd RAG.Infrastructure
-   dotnet ef database update --startup-project ../RAG.APIs
-   ```
+# Test connectivity
+telnet <RDS_ENDPOINT> 5432
 
-3. **Lambda Cold Start**:
-   - Tăng memory allocation trong deployment config
-   - Sử dụng provisioned concurrency (tốn phí)
+# Check RDS status
+aws rds describe-db-instances \
+  --db-instance-identifier rag-system-production-db
+```
 
-## 🎯 Next Steps
+#### 2. Lambda Cold Start Issues
+```bash
+# Increase memory allocation
+aws lambda update-function-configuration \
+  --function-name rag-system-production-api \
+  --memory-size 1024
 
-1. **Setup CI/CD**: Tích hợp scripts vào GitHub Actions hoặc Azure DevOps
-2. **Monitoring**: Setup CloudWatch alarms và notifications
-3. **Security**: Review IAM permissions và security groups
-4. **Performance**: Monitor Lambda performance và optimize
-5. **Backup**: Setup automated database backups
+# Check execution duration
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/rag-system-production-api \
+  --filter-pattern "REPORT"
+```
+
+#### 3. Build/Deployment Issues
+```bash
+# Clean build
+dotnet clean RAG-System.slnx
+dotnet restore RAG-System.slnx
+dotnet build RAG-System.slnx --configuration Release
+
+# Check deployment package
+unzip -l rag-system-deployment.zip | head -20
+```
+
+## 🎯 Production Checklist
+
+### Pre-Deployment
+- [ ] AWS CLI configured và tested
+- [ ] Code reviewed và merged
+- [ ] Local build successful
+- [ ] Database migrations tested on staging
+- [ ] Environment variables configured
+
+### Deployment
+- [ ] RDS instance provisioned
+- [ ] Lambda function created
+- [ ] Database migrations applied
+- [ ] Application code deployed
+- [ ] Environment variables updated
+
+### Post-Deployment
+- [ ] API endpoints responding
+- [ ] Database connectivity verified
+- [ ] CloudWatch logs showing no errors
+- [ ] Performance metrics within acceptable range
+- [ ] Security groups properly configured
+
+## 💡 Best Practices
+
+### Security
+- Use strong passwords for RDS
+- Enable SSL/TLS for all connections
+- Regularly rotate credentials
+- Monitor CloudWatch for suspicious activity
+- Use least privilege IAM policies
+
+### Performance
+- Monitor Lambda cold starts
+- Optimize database queries
+- Use connection pooling
+- Consider provisioned concurrency for high-traffic functions
+
+### Cost Optimization
+- Use appropriate instance sizes
+- Monitor AWS costs regularly
+- Clean up unused resources
+- Use reserved instances for predictable workloads
 
 ## 📞 Support
 

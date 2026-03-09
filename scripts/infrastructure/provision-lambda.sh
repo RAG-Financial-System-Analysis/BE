@@ -3,7 +3,7 @@
 # Lambda Function Provisioning Script
 # Creates AWS Lambda functions configured for .NET 10 runtime
 # Implements cost-optimized memory and timeout settings
-# Configures VPC settings for database access
+# No VPC configuration for simplified deployment and external API access
 # Sets up IAM roles and policies for Lambda execution
 
 set -euo pipefail
@@ -41,9 +41,6 @@ LAMBDA_POLICY_NAME="$PROJECT_NAME-$ENVIRONMENT-lambda-policy"
 # Global variables for resource tracking
 LAMBDA_ROLE_ARN=""
 LAMBDA_FUNCTION_ARN=""
-VPC_ID=""
-SUBNET_IDS=""
-SECURITY_GROUP_ID=""
 
 # Function to display usage information
 show_usage() {
@@ -51,6 +48,7 @@ show_usage() {
 Usage: $0 [OPTIONS]
 
 Provisions AWS Lambda function configured for .NET runtime with cost optimization.
+No VPC configuration for simplified deployment and external API access.
 
 OPTIONS:
     --function-name NAME       Lambda function name (default: $PROJECT_NAME-$ENVIRONMENT-api)
@@ -70,12 +68,15 @@ EXAMPLES:
 COST OPTIMIZATION:
     - Uses 512MB memory allocation (cost-effective for most workloads)
     - 30-second timeout (sufficient for database operations)
-    - VPC configuration only when needed for RDS access
+    - No VPC configuration (reduces cold start time and complexity)
     - Minimal IAM permissions (principle of least privilege)
 
-PREREQUISITES:
-    - RDS infrastructure must be provisioned first (run provision-rds.sh)
-    - AWS CLI configured with appropriate permissions
+BENEFITS OF NO VPC:
+    - Faster cold starts
+    - Direct internet access for external APIs
+    - Simplified networking
+    - Can access Cognito and other AWS services directly
+    - Can connect to public RDS instances
 
 EOF
 }
@@ -135,89 +136,6 @@ parse_arguments() {
     LAMBDA_POLICY_NAME="$PROJECT_NAME-$ENVIRONMENT-lambda-policy"
 }
 
-# Function to load RDS infrastructure state
-load_rds_infrastructure_state() {
-    local state_file="./deployment_checkpoints/rds_infrastructure.state"
-    
-    if [ -f "$state_file" ]; then
-        log_info "Loading RDS infrastructure state from: $state_file"
-        source "$state_file"
-        
-        if [ -n "$VPC_ID" ] && [ -n "$SUBNET_ID_1" ] && [ -n "$SUBNET_ID_2" ]; then
-            SUBNET_IDS="$SUBNET_ID_1,$SUBNET_ID_2"
-            log_success "Loaded RDS infrastructure state"
-            log_info "VPC ID: $VPC_ID"
-            log_info "Subnet IDs: $SUBNET_IDS"
-            return 0
-        else
-            log_warn "RDS infrastructure state file exists but is incomplete"
-        fi
-    else
-        log_warn "RDS infrastructure state file not found: $state_file"
-    fi
-    
-    log_warn "Lambda will be created without VPC configuration"
-    log_warn "Run provision-rds.sh first to enable database access"
-    return 1
-}
-
-# Function to create Lambda security group
-create_lambda_security_group() {
-    if [ -z "$VPC_ID" ]; then
-        log_info "Skipping Lambda security group creation (no VPC)"
-        return 0
-    fi
-    
-    local sg_name="$PROJECT_NAME-$ENVIRONMENT-lambda-sg"
-    
-    log_info "Checking for existing Lambda security group: $sg_name"
-    
-    local sg_id=$(aws ec2 describe-security-groups \
-        --filters "Name=group-name,Values=$sg_name" "Name=vpc-id,Values=$VPC_ID" \
-        --query 'SecurityGroups[0].GroupId' \
-        --output text 2>/dev/null || echo "None")
-    
-    if [ "$sg_id" != "None" ] && [ "$sg_id" != "null" ]; then
-        log_info "Found existing Lambda security group: $sg_id"
-        SECURITY_GROUP_ID="$sg_id"
-        return 0
-    fi
-    
-    log_info "Creating Lambda security group: $sg_name"
-    set_error_context "Lambda security group creation"
-    set_error_remediation "Check AWS permissions for EC2 security group operations"
-    
-    SECURITY_GROUP_ID=$(execute_with_error_handling \
-        "aws ec2 create-security-group --group-name $sg_name --description 'Security group for Lambda functions' --vpc-id $VPC_ID --query 'GroupId' --output text" \
-        "Failed to create Lambda security group" \
-        $ERROR_CODE_INFRASTRUCTURE)
-    
-    log_success "Created Lambda security group: $SECURITY_GROUP_ID"
-    
-    # Tag the security group
-    execute_with_error_handling \
-        "aws ec2 create-tags --resources $SECURITY_GROUP_ID --tags Key=Name,Value=$sg_name Key=Environment,Value=$ENVIRONMENT Key=Project,Value=$PROJECT_NAME" \
-        "Failed to tag Lambda security group" \
-        $ERROR_CODE_INFRASTRUCTURE
-    
-    # Add outbound rule for HTTPS (443) - for external API calls
-    log_info "Adding HTTPS outbound rule to Lambda security group"
-    execute_with_error_handling \
-        "aws ec2 authorize-security-group-egress --group-id $SECURITY_GROUP_ID --protocol tcp --port 443 --cidr 0.0.0.0/0" \
-        "Failed to add HTTPS outbound rule" \
-        $ERROR_CODE_INFRASTRUCTURE
-    
-    # Add outbound rule for PostgreSQL (5432) - for RDS access
-    log_info "Adding PostgreSQL outbound rule to Lambda security group"
-    execute_with_error_handling \
-        "aws ec2 authorize-security-group-egress --group-id $SECURITY_GROUP_ID --protocol tcp --port 5432 --cidr 10.0.0.0/16" \
-        "Failed to add PostgreSQL outbound rule" \
-        $ERROR_CODE_INFRASTRUCTURE
-    
-    log_success "Lambda security group configuration completed"
-    register_cleanup_function "cleanup_lambda_security_group"
-}
-
 # Function to create IAM trust policy document
 create_lambda_trust_policy() {
     cat << EOF
@@ -238,24 +156,6 @@ EOF
 
 # Function to create IAM policy document for Lambda execution
 create_lambda_execution_policy() {
-    local vpc_permissions=""
-    
-    # Add VPC permissions if VPC is configured
-    if [ -n "$VPC_ID" ]; then
-        vpc_permissions=',
-        {
-            "Effect": "Allow",
-            "Action": [
-                "ec2:CreateNetworkInterface",
-                "ec2:DescribeNetworkInterfaces",
-                "ec2:DeleteNetworkInterface",
-                "ec2:AttachNetworkInterface",
-                "ec2:DetachNetworkInterface"
-            ],
-            "Resource": "*"
-        }'
-    fi
-    
     cat << EOF
 {
     "Version": "2012-10-17",
@@ -290,7 +190,7 @@ create_lambda_execution_policy() {
                 "secretsmanager:DescribeSecret"
             ],
             "Resource": "*"
-        }$vpc_permissions
+        }
     ]
 }
 EOF
@@ -360,21 +260,12 @@ create_lambda_iam_role() {
         "Failed to attach custom policy to Lambda role" \
         $ERROR_CODE_INFRASTRUCTURE
     
-    # Attach AWS managed policy for VPC access (if VPC is configured)
-    if [ -n "$VPC_ID" ]; then
-        log_info "Attaching VPC execution policy to Lambda role"
-        execute_with_error_handling \
-            "aws iam attach-role-policy --role-name $LAMBDA_ROLE_NAME --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole" \
-            "Failed to attach VPC execution policy to Lambda role" \
-            $ERROR_CODE_INFRASTRUCTURE
-    else
-        # Attach basic execution policy if no VPC
-        log_info "Attaching basic execution policy to Lambda role"
-        execute_with_error_handling \
-            "aws iam attach-role-policy --role-name $LAMBDA_ROLE_NAME --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" \
-            "Failed to attach basic execution policy to Lambda role" \
-            $ERROR_CODE_INFRASTRUCTURE
-    fi
+    # Attach AWS managed basic execution policy (no VPC)
+    log_info "Attaching basic execution policy to Lambda role"
+    execute_with_error_handling \
+        "aws iam attach-role-policy --role-name $LAMBDA_ROLE_NAME --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" \
+        "Failed to attach basic execution policy to Lambda role" \
+        $ERROR_CODE_INFRASTRUCTURE
     
     # Configure Cognito permissions for Lambda role
     log_info "Configuring Cognito permissions for Lambda role"
@@ -408,8 +299,6 @@ create_placeholder_deployment_package() {
     local package_dir="./lambda-package"
     local zip_file="./lambda-deployment.zip"
     
-    # Don't use log_info here as it will interfere with the return value
-    
     # Create temporary directory
     mkdir -p "$package_dir"
     
@@ -422,7 +311,8 @@ def lambda_handler(event, context):
         'statusCode': 200,
         'body': json.dumps({
             'message': 'Lambda function created successfully. Deploy your .NET application to replace this placeholder.',
-            'timestamp': context.aws_request_id
+            'timestamp': context.aws_request_id,
+            'environment': 'No VPC - Direct internet access enabled'
         })
     }
 EOF
@@ -470,7 +360,7 @@ create_lambda_function() {
     fi
     
     log_info "Creating Lambda function: $LAMBDA_FUNCTION_NAME"
-    log_info "Configuration: $RUNTIME, ${MEMORY_SIZE}MB, ${TIMEOUT}s timeout"
+    log_info "Configuration: $RUNTIME, ${MEMORY_SIZE}MB, ${TIMEOUT}s timeout, No VPC"
     
     set_error_context "Lambda function creation"
     set_error_remediation "Check AWS permissions for Lambda operations and ensure IAM role exists"
@@ -482,16 +372,7 @@ create_lambda_function() {
         handle_error $ERROR_CODE_LAMBDA "Failed to create deployment package" true
     fi
     
-    # Prepare VPC configuration
-    local vpc_config=""
-    if [ -n "$VPC_ID" ] && [ -n "$SUBNET_IDS" ] && [ -n "$SECURITY_GROUP_ID" ]; then
-        vpc_config="--vpc-config SubnetIds=$SUBNET_IDS,SecurityGroupIds=$SECURITY_GROUP_ID"
-        log_info "Configuring Lambda with VPC access"
-    else
-        log_info "Creating Lambda without VPC configuration"
-    fi
-    
-    # Create Lambda function
+    # Create Lambda function without VPC configuration
     LAMBDA_FUNCTION_ARN=$(execute_with_error_handling \
         "aws lambda create-function \
             --function-name $LAMBDA_FUNCTION_NAME \
@@ -501,8 +382,7 @@ create_lambda_function() {
             --zip-file fileb://$zip_file \
             --memory-size $MEMORY_SIZE \
             --timeout $TIMEOUT \
-            --description 'Placeholder Lambda function for $PROJECT_NAME $ENVIRONMENT' \
-            $vpc_config \
+            --description 'Placeholder Lambda function for $PROJECT_NAME $ENVIRONMENT - No VPC configuration' \
             --tags Environment=$ENVIRONMENT,Project=$PROJECT_NAME \
             --query 'FunctionArn' \
             --output text" \
@@ -530,13 +410,24 @@ configure_lambda_environment() {
         db_password="PLACEHOLDER_PASSWORD"
     fi
     
+    # Load RDS endpoint from state file
+    local db_endpoint=""
+    if [ -f "./deployment_checkpoints/rds_infrastructure.state" ]; then
+        source "./deployment_checkpoints/rds_infrastructure.state"
+        db_endpoint="$DB_ENDPOINT"
+        log_info "Retrieved RDS endpoint from state: $db_endpoint"
+    else
+        log_warn "RDS infrastructure state not found. Lambda will need manual database configuration."
+        db_endpoint="PLACEHOLDER_ENDPOINT"
+    fi
+    
     # Prepare environment variables
     local env_vars="Variables={"
     env_vars="${env_vars}ASPNETCORE_ENVIRONMENT=$ENVIRONMENT"
     
-    # Add database connection string if RDS is configured
-    if [ -n "${DB_ENDPOINT:-}" ]; then
-        local connection_string="Host=${DB_ENDPOINT};Database=appdb;Username=dbadmin;Password=${db_password};Port=5432;SSL Mode=Require;"
+    # Add database connection string
+    if [ "$db_endpoint" != "PLACEHOLDER_ENDPOINT" ]; then
+        local connection_string="Host=${db_endpoint};Database=appdb;Username=dbadmin;Password=${db_password};Port=5432;SSL Mode=Require;"
         env_vars="${env_vars},ConnectionStrings__DefaultConnection=$connection_string"
         log_info "Added database connection string to environment variables"
     fi
@@ -575,9 +466,6 @@ cleanup_lambda_iam_role() {
         aws iam detach-role-policy \
             --role-name "$LAMBDA_ROLE_NAME" \
             --policy-arn "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" &>/dev/null || true
-        aws iam detach-role-policy \
-            --role-name "$LAMBDA_ROLE_NAME" \
-            --policy-arn "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole" &>/dev/null || true
         
         # Delete custom policy
         local policy_arn="arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):policy/$LAMBDA_POLICY_NAME"
@@ -597,14 +485,6 @@ cleanup_lambda_iam_role() {
     fi
 }
 
-cleanup_lambda_security_group() {
-    if [ -n "$SECURITY_GROUP_ID" ]; then
-        log_info "Cleaning up Lambda security group: $SECURITY_GROUP_ID"
-        aws ec2 delete-security-group \
-            --group-id "$SECURITY_GROUP_ID" &>/dev/null || true
-    fi
-}
-
 # Function to save Lambda infrastructure state
 save_lambda_infrastructure_state() {
     local state_file="./deployment_checkpoints/lambda_infrastructure.state"
@@ -618,12 +498,12 @@ LAMBDA_FUNCTION_ARN="$LAMBDA_FUNCTION_ARN"
 LAMBDA_ROLE_NAME="$LAMBDA_ROLE_NAME"
 LAMBDA_ROLE_ARN="$LAMBDA_ROLE_ARN"
 LAMBDA_POLICY_NAME="$LAMBDA_POLICY_NAME"
-SECURITY_GROUP_ID="$SECURITY_GROUP_ID"
 RUNTIME="$RUNTIME"
 MEMORY_SIZE="$MEMORY_SIZE"
 TIMEOUT="$TIMEOUT"
 ENVIRONMENT="$ENVIRONMENT"
 PROJECT_NAME="$PROJECT_NAME"
+VPC_ENABLED="false"
 EOF
     
     log_success "Lambda infrastructure state saved to: $state_file"
@@ -640,33 +520,37 @@ display_lambda_info() {
     echo "Memory: ${MEMORY_SIZE}MB"
     echo "Timeout: ${TIMEOUT}s"
     echo "Handler: $HANDLER"
+    echo "VPC Configuration: None (Direct internet access)"
     echo ""
     echo "=== IAM Configuration ==="
     echo "Role Name: $LAMBDA_ROLE_NAME"
     echo "Role ARN: $LAMBDA_ROLE_ARN"
     echo ""
-    if [ -n "$VPC_ID" ]; then
-        echo "=== VPC Configuration ==="
-        echo "VPC ID: $VPC_ID"
-        echo "Subnet IDs: $SUBNET_IDS"
-        echo "Security Group ID: $SECURITY_GROUP_ID"
-        echo ""
-    fi
+    echo "=== Network Configuration ==="
+    echo "VPC: Not configured (uses default AWS networking)"
+    echo "Internet Access: Direct (no NAT Gateway required)"
+    echo "Cold Start: Faster (no VPC overhead)"
+    echo ""
     echo "=== Security Notes ==="
     echo "- IAM role follows principle of least privilege"
     echo "- Cognito integration permissions included"
     echo "- CloudWatch logging enabled"
-    if [ -n "$VPC_ID" ]; then
-        echo "- VPC configuration enables RDS access"
-    else
-        echo "- No VPC configuration (run provision-rds.sh first for database access)"
-    fi
+    echo "- Direct access to AWS services (Cognito, RDS, etc.)"
+    echo "- Can make external API calls without NAT Gateway"
+    echo ""
+    echo "=== Benefits of No VPC ==="
+    echo "- Faster cold starts"
+    echo "- Direct internet access for external APIs"
+    echo "- Simplified networking"
+    echo "- Can access public RDS instances"
+    echo "- No additional networking costs"
     echo ""
     echo "=== Next Steps ==="
     echo "1. Deploy your .NET application code to replace the placeholder"
     echo "2. Update the runtime to dotnet8 when deploying .NET code"
     echo "3. Configure additional environment variables as needed"
     echo "4. Test the function with sample events"
+    echo "5. Set up API Gateway if needed for HTTP access"
     echo ""
 }
 
@@ -690,12 +574,9 @@ main() {
     log_info "  Memory: ${MEMORY_SIZE}MB"
     log_info "  Timeout: ${TIMEOUT}s"
     log_info "  Handler: $HANDLER"
-    
-    # Load RDS infrastructure state (optional)
-    load_rds_infrastructure_state || true
+    log_info "  VPC: None (Direct internet access)"
     
     # Create Lambda infrastructure components
-    create_lambda_security_group
     create_lambda_iam_role
     create_lambda_function
     configure_lambda_environment
