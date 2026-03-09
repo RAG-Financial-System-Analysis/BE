@@ -128,5 +128,19 @@ namespace RAG.APIs.Controllers
                 return StatusCode(500, new { Message = "An error occurred while creating the report category.", Details = ex.Message });
             }
         }
+
+        [HttpGet("report-categories")]
+        public async Task<IActionResult> GetReportCategories([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var response = await _adminService.GetReportCategoriesAsync(page, pageSize);
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred while retrieving report categories.", Details = ex.Message });
+            }
+        }
     }
 }

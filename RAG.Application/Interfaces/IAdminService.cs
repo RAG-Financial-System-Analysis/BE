@@ -10,5 +10,6 @@ namespace RAG.Application.Interfaces
         Task<GetAuditLogsResponse> GetAuditLogsAsync(Guid? userId, string action, DateTime? startDate, DateTime? endDate, int page, int pageSize);
         Task<SystemStatisticsResponse> GetSystemStatisticsAsync();
         Task<CreateReportCategoriesResponse> CreateReportCategoryAsync(CreateReportCategoriesRequest request);
+        Task<GetReportCategoriesResponse> GetReportCategoriesAsync(int page, int pageSize);
     }
 }

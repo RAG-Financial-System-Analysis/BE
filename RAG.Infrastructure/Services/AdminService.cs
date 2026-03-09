@@ -149,5 +149,32 @@ namespace RAG.Infrastructure.Services
                 Message = "Report category created successfully"
             };
         }
+
+        public async Task<GetReportCategoriesResponse> GetReportCategoriesAsync(int page, int pageSize)
+        {
+            var query = _dbContext.ReportCategories.AsNoTracking();
+            var total = await query.CountAsync();
+            
+            var data = await query
+                .Select(c => new ReportCategoryDto
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    Description = c.Description,
+                    AssociatedReportsCount = c.ReportFinancials.Count
+                })
+                .OrderBy(c => c.Name)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return new GetReportCategoriesResponse
+            {
+                Total = total,
+                Page = page,
+                PageSize = pageSize,
+                Data = data
+            };
+        }
     }
 }
