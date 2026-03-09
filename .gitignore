@@ -445,6 +445,17 @@ Migrations/
 
 # AWS credentials (if stored locally)
 .aws/
+deployment-config.env
+
+# Deployment artifacts and logs
+deployment_checkpoints/
+deployment_logs/
+logs/
+
+# All deployment log files (in case they're created in root)
+deployment_*.log
+*_errors.log
+deployment.log
 
 # Docker (chỉ bỏ qua .dockerignore nếu muốn, Dockerfile và docker-compose cần commit)
 # .dockerignore
