@@ -14,5 +14,9 @@ namespace RAG.Application.Interfaces
         Task<GetReportCategoryByIdResponse> GetReportCategoryByIdAsync(Guid id);
         Task UpdateReportCategoryAsync(Guid id, UpdateReportCategoryRequest request);
         Task DeleteReportCategoryAsync(Guid id);
+        Task<GetReportCategoriesForAnalystResponse> GetReportCategoriesForAnalystAsync();
+        Task<CreateAnalyticsTypeResponse> CreateAnalyticsTypeAsync(CreateAnalyticsTypeRequest request);
+        Task UpdateAnalyticsTypeAsync(Guid id, UpdateAnalyticsTypeRequest request);
+        Task DeleteAnalyticsTypeAsync(Guid id);
     }
 }

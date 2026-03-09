@@ -204,5 +204,67 @@ namespace RAG.APIs.Controllers
                 return StatusCode(500, new { Message = "An error occurred while deleting the report category.", Details = ex.Message });
             }
         }
+
+        [HttpPost("analytics-types")]
+        public async Task<IActionResult> CreateAnalyticsType([FromBody] CreateAnalyticsTypeRequest request)
+        {
+            try
+            {
+                var response = await _adminService.CreateAnalyticsTypeAsync(request);
+                return StatusCode(201, response);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred while creating the analytics type.", Details = ex.Message });
+            }
+        }
+
+        [HttpPut("analytics-types/{id}")]
+        public async Task<IActionResult> UpdateAnalyticsType([FromRoute] Guid id, [FromBody] UpdateAnalyticsTypeRequest request)
+        {
+            try
+            {
+                await _adminService.UpdateAnalyticsTypeAsync(id, request);
+                return Ok(new { Message = "Analytics type updated successfully" });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred while updating the analytics type.", Details = ex.Message });
+            }
+        }
+
+        [HttpDelete("analytics-types/{id}")]
+        public async Task<IActionResult> DeleteAnalyticsType([FromRoute] Guid id)
+        {
+            try
+            {
+                await _adminService.DeleteAnalyticsTypeAsync(id);
+                return Ok(new { Message = "Analytics type deleted successfully" });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred while deleting the analytics type.", Details = ex.Message });
+            }
+        }
     }
 }

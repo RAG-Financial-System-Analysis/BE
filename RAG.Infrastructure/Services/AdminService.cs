@@ -237,5 +237,82 @@ namespace RAG.Infrastructure.Services
             _dbContext.ReportCategories.Remove(category);
             await _dbContext.SaveChangesAsync();
         }
+
+        public async Task<GetReportCategoriesForAnalystResponse> GetReportCategoriesForAnalystAsync()
+        {
+            var categories = await _dbContext.ReportCategories
+                .AsNoTracking()
+                .OrderBy(c => c.Name)
+                .Select(c => new ReportCategorySimpleDto
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    Description = c.Description
+                })
+                .ToListAsync();
+
+            return new GetReportCategoriesForAnalystResponse { Categories = categories };
+        }
+
+        public async Task<CreateAnalyticsTypeResponse> CreateAnalyticsTypeAsync(CreateAnalyticsTypeRequest request)
+        {
+            var exists = await _dbContext.AnalyticsTypes.AnyAsync(t => t.Code == request.Code);
+            if (exists)
+                throw new ArgumentException("Code already exists");
+
+            var analyticsType = new AnalyticsType
+            {
+                Id = Guid.NewGuid(),
+                Code = request.Code,
+                Name = request.Name,
+                Description = request.Description,
+                Createdat = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+            };
+
+            _dbContext.AnalyticsTypes.Add(analyticsType);
+            await _dbContext.SaveChangesAsync();
+
+            return new CreateAnalyticsTypeResponse
+            {
+                Id = analyticsType.Id,
+                Message = "Analytics type created successfully"
+            };
+        }
+
+        public async Task UpdateAnalyticsTypeAsync(Guid id, UpdateAnalyticsTypeRequest request)
+        {
+            var analyticsType = await _dbContext.AnalyticsTypes.FindAsync(id);
+            if (analyticsType == null)
+                throw new KeyNotFoundException("Analytics type not found");
+
+            var codeExists = await _dbContext.AnalyticsTypes
+                .AnyAsync(t => t.Code == request.Code && t.Id != id);
+            if (codeExists)
+                throw new ArgumentException("Code already exists");
+
+            analyticsType.Code = request.Code;
+            analyticsType.Name = request.Name;
+            analyticsType.Description = request.Description;
+            // Createdat is not updated intentionally
+
+            _dbContext.AnalyticsTypes.Update(analyticsType);
+            await _dbContext.SaveChangesAsync();
+        }
+
+        public async Task DeleteAnalyticsTypeAsync(Guid id)
+        {
+            var analyticsType = await _dbContext.AnalyticsTypes
+                .Include(t => t.ChatSessions)
+                .FirstOrDefaultAsync(t => t.Id == id);
+
+            if (analyticsType == null)
+                throw new KeyNotFoundException("Analytics type not found");
+
+            if (analyticsType.ChatSessions.Any())
+                throw new InvalidOperationException("Cannot delete analytics type with associated chat sessions");
+
+            _dbContext.AnalyticsTypes.Remove(analyticsType);
+            await _dbContext.SaveChangesAsync();
+        }
     }
 }
