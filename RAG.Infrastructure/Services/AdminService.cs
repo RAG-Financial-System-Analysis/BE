@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RAG.Application.Interfaces;
+using RAG.Domain;
 using RAG.Domain.DTOs.Admin;
 using RAG.Infrastructure.Database;
 using System;
@@ -91,14 +92,14 @@ namespace RAG.Infrastructure.Services
             // 3. Chat Sessions Statistics
             var chatsQuery = _dbContext.ChatSessions.AsNoTracking();
             var totalChats = await chatsQuery.CountAsync();
-            
+
             var today = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Unspecified);
             var activeTodayChats = await chatsQuery.CountAsync(c => c.Createdat >= today);
 
             // 4. Storage Statistics
             var totalSizeKb = await reportsQuery.SumAsync(r => (long)(r.Filesizekb ?? 0));
             var totalSizeGb = totalSizeKb / (double)(1024 * 1024);
-            var filesCount = totalReports; 
+            var filesCount = totalReports;
 
             return new SystemStatisticsResponse
             {
@@ -124,6 +125,28 @@ namespace RAG.Infrastructure.Services
                     TotalSizeGB = Math.Round(totalSizeGb, 2),
                     FilesCount = filesCount
                 }
+            };
+        }
+        public async Task<CreateReportCategoriesResponse> CreateReportCategoryAsync(CreateReportCategoriesRequest request)
+        {
+            var exists = await _dbContext.ReportCategories.AnyAsync(c => c.Name == request.Name);
+            if (exists)
+            {
+                throw new ArgumentException("Name already exists");
+            }
+
+            var category = new ReportCategory
+            {
+                Id = Guid.NewGuid(),
+                Name = request.Name,
+                Description = request.Description
+            };
+            _dbContext.ReportCategories.Add(category);
+            await _dbContext.SaveChangesAsync();
+            return new CreateReportCategoriesResponse
+            {
+                Id = category.Id,
+                Message = "Report category created successfully"
             };
         }
     }

@@ -80,11 +80,11 @@ namespace RAG.APIs.Controllers
 
         [HttpGet("audit-logs")]
         public async Task<IActionResult> GetAuditLogs(
-            [FromQuery] Guid? userId, 
-            [FromQuery] string? action, 
-            [FromQuery] DateTime? startDate, 
-            [FromQuery] DateTime? endDate, 
-            [FromQuery] int page = 1, 
+            [FromQuery] Guid? userId,
+            [FromQuery] string? action,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate,
+            [FromQuery] int page = 1,
             [FromQuery] int pageSize = 50)
         {
             try
@@ -109,6 +109,23 @@ namespace RAG.APIs.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { Message = "An error occurred while retrieving system statistics.", Details = ex.Message });
+            }
+        }
+        [HttpPost("report-categories")]
+        public async Task<IActionResult> CreateReportCategory([FromBody] CreateReportCategoriesRequest request)
+        {
+            try
+            {
+                var response = await _adminService.CreateReportCategoryAsync(request);
+                return StatusCode(201, response);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred while creating the report category.", Details = ex.Message });
             }
         }
     }
