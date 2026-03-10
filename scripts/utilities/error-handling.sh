@@ -284,7 +284,21 @@ handle_aws_error() {
         set_error_remediation "Network connectivity issue. Check internet connection and AWS service status."
         handle_error $ERROR_CODE_NETWORK "Network connectivity error" true
     elif echo "$error_output" | grep -q "NoCredentialsError"; then
-        set_error_remediation "AWS credentials not configured. Run 'aws configure' or set AWS_PROFILE environment variable."
+        set_error_remediation "AWS credentials not configured. Please configure using one of these methods:
+        
+Method 1 - AWS CLI configure:
+  aws configure
+
+Method 2 - Environment variables:
+  export AWS_ACCESS_KEY_ID=your-access-key
+  export AWS_SECRET_ACCESS_KEY=your-secret-key
+  export AWS_DEFAULT_REGION=ap-southeast-1
+
+Method 3 - AWS Profile:
+  export AWS_PROFILE=your-profile-name
+
+Method 4 - Check existing credentials:
+  aws sts get-caller-identity"
         handle_error $ERROR_CODE_AWS_CREDENTIALS "AWS credentials not found" true
     else
         set_error_remediation "Check AWS CLI configuration, network connectivity, and service status at https://status.aws.amazon.com/"

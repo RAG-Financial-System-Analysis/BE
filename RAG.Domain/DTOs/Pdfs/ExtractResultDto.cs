@@ -10,5 +10,6 @@ namespace RAG.Domain.DTOs.Pdfs
         public List<MetricDto> Metrics { get; set; } = new();
         public int PageCount { get; set; }
         public long FileSizeBytes { get; set; }
+        public string PdfType { get; set; } = string.Empty; // NEW: PDF type info
     }
 }

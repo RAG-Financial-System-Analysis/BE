@@ -445,7 +445,12 @@ Migrations/
 
 # AWS credentials (if stored locally)
 .aws/
-deployment-config.env
+
+# Configuration files (keep template, ignore custom configs)
+deployment-config-*.env
+!deployment-config.env
+*-config.env
+*.local.env
 
 # Deployment artifacts and logs
 deployment_checkpoints/
@@ -457,6 +462,15 @@ deployment_*.log
 *_errors.log
 deployment.log
 
+# Deployment temporary files
+*.zip
+lambda-deployment.zip
+lambda-*.zip
+test-event.json
+response.json
+lambda-trust-policy.json
+lambda-execution-policy.json
+
 # Docker (chỉ bỏ qua .dockerignore nếu muốn, Dockerfile và docker-compose cần commit)
 # .dockerignore
 
@@ -465,3 +479,13 @@ deployment.log
 *.yml
 !appsettings*.yml
 !appsettings*.yaml
+# Additional deployment artifacts
+scripts/temp/
+lambda-env-vars.json
+lambda-update.json
+migration-test-event.json
+migration-response.json
+env-vars-fixed.json
+
+# Build artifacts
+/tmp/lambda-build/

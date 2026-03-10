@@ -19,7 +19,7 @@ source "$UTILITIES_DIR/validate-aws-cli.sh"
 
 # Configuration variables
 ENVIRONMENT="${ENVIRONMENT:-dev}"
-PROJECT_NAME="${PROJECT_NAME:-myapp}"
+PROJECT_NAME="${PROJECT_NAME:-myragapp}"
 
 # IAM resource naming
 LAMBDA_ROLE_NAME="$PROJECT_NAME-$ENVIRONMENT-lambda-execution-role"
@@ -136,7 +136,9 @@ get_aws_account_info() {
         "Failed to get AWS account ID" \
         $ERROR_CODE_AWS_CREDENTIALS)
     
-    AWS_REGION=$(aws configure get region || echo "us-east-1")
+    # Use flexible region detection
+    source "$SCRIPT_DIR/../utilities/validate-aws-cli.sh"
+    AWS_REGION=$(get_aws_region)
     
     log_success "AWS Account ID: $AWS_ACCOUNT_ID"
     log_success "AWS Region: $AWS_REGION"

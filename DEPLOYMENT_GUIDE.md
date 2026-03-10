@@ -1,359 +1,543 @@
-# Hướng Dẫn Deployment cho RAG System - Simplified Architecture
+# RAG System AWS Deployment Guide
 
-## 🏗️ Kiến Trúc Deployment Đơn Giản
+Complete guide for deploying the RAG System to AWS using Lambda, RDS, and API Gateway.
 
-### Không Sử Dụng VPC
-Scripts đã được tối ưu để **KHÔNG sử dụng VPC** nhằm:
-- ✅ Đơn giản hóa deployment
-- ✅ Lambda có thể truy cập trực tiếp Cognito và external APIs
-- ✅ Frontend có thể truy cập RDS public endpoint
-- ✅ Giảm chi phí (không cần NAT Gateway)
-- ✅ Tăng tốc cold start của Lambda
+## 📋 Table of Contents
 
-### Kiến Trúc Hệ Thống
-```
-Internet
-    ↓
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Frontend      │────│   Lambda API     │────│   RDS Public    │
-│   (React/Vue)   │    │   (No VPC)       │    │   (PostgreSQL)  │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                              │
-                              ↓
-                       ┌──────────────────┐
-                       │   AWS Cognito    │
-                       │   (User Auth)    │
-                       └──────────────────┘
-```
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Detailed Deployment Steps](#detailed-deployment-steps)
+- [Configuration](#configuration)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+- [Cleanup](#cleanup)
 
-## 📁 Cấu Trúc Dự Án
+## 🎯 Overview
 
-```
-BE/
-├── RAG.APIs/              # Main API project (Lambda entry point)
-├── RAG.Application/       # Application layer
-├── RAG.Domain/           # Domain layer  
-├── RAG.Infrastructure/   # Infrastructure layer
-├── Database/             # Database scripts
-├── appsettings.json      # Configuration
-├── RAG-System.slnx       # Solution file
-└── scripts/              # Deployment scripts
-    ├── infrastructure/   # AWS resource provisioning
-    ├── deployment/       # Application deployment
-    ├── migration/        # Database migrations
-    └── utilities/        # Helper scripts
-```
+This deployment guide covers the complete RAG System deployment to AWS with the following architecture:
 
-## 📋 Cấu Hình Deployment
+- **RDS PostgreSQL**: Database for storing application data
+- **AWS Lambda**: .NET 10 serverless function hosting the API
+- **API Gateway**: REST API endpoint for client access
+- **AWS Cognito**: User authentication and authorization
 
-### Tạo File Cấu Hình
+### Deployment Order
+
+The deployment follows this specific order to ensure dependencies are met:
+
+1. 🗄️ **Deploy RDS Database**
+2. ⚡ **Deploy Lambda Function**
+3. 🔄 **Run Database Migrations** (from Lambda to DB)
+4. 🌱 **Trigger DbInitializer** (automatically seeds roles, analytics types, and users)
+5. � **Deploy API Gateway**
+6. 🧪 **Run Tests**
+
+## 🔧 Prerequisites
+
+### Required Software
+
+- **AWS CLI** v2.0+ with flexible credential configuration (see below)
+- **.NET SDK** 8.0+ (for building .NET 10 applications)
+- **PostgreSQL Client** (psql) for database operations
+- **Bash** shell (Git Bash on Windows)
+
+### AWS Credentials Setup (One-Time Configuration)
+
+**⚠️ QUAN TRỌNG: Bạn chỉ cần cấu hình AWS credentials MỘT LẦN duy nhất. Sau đó tất cả các lần deploy sẽ tự động sử dụng credentials đã lưu.**
+
+The deployment scripts support multiple AWS credential configuration methods and will automatically detect which method you're using:
+
+#### Method 1: AWS CLI Configuration (Recommended - Chỉ cần làm 1 lần)
 ```bash
-# Tạo file config deployment
-cat > deployment-config.env << EOF
-# RAG System Deployment Configuration
-PROJECT_NAME="rag-system"
-SOLUTION_FILE="RAG-System.slnx"
-MAIN_PROJECT="RAG.APIs"
-MAIN_PROJECT_PATH="RAG.APIs/RAG.APIs.csproj"
-DATABASE_SCRIPT="Database/scriptDB_final.sql"
-APPSETTINGS_FILE="RAG.APIs/appsettings.json"
-
-# AWS Configuration
-AWS_REGION="ap-southeast-1"
-LAMBDA_RUNTIME="dotnet8"
-LAMBDA_MEMORY="1024"
-LAMBDA_TIMEOUT="30"
-
-# Database Configuration (Public Access)
-DB_ENGINE="postgres"
-DB_VERSION="16.13"
-DB_INSTANCE_CLASS="db.t3.micro"
-DB_NAME="appdb"
-DB_PUBLIC_ACCESS="true"
-EOF
-```
-
-### Cấu Hình AWS CLI
-```bash
-# Cấu hình AWS credentials
 aws configure
-# AWS Access Key ID: [Your Access Key]
-# AWS Secret Access Key: [Your Secret Key]  
-# Default region name: ap-southeast-1
-# Default output format: json
-
-# Hoặc sử dụng profile
-aws configure --profile rag-system
-export AWS_PROFILE=rag-system
 ```
+**Nhập thông tin khi được hỏi:**
+- AWS Access Key ID: [your-access-key]
+- AWS Secret Access Key: [your-secret-key]
+- Default region name: `ap-southeast-1` (Singapore - gần Việt Nam nhất)
+- Default output format: `json`
 
-## 🚀 Deployment Commands
+**📁 Credentials được lưu tại:**
+- `~/.aws/credentials` - chứa Access Key ID và Secret Access Key
+- `~/.aws/config` - chứa region và các cấu hình khác
 
-### 1. Thiết Lập Ban Đầu
+**🔒 Bảo mật:**
+- Các file này ở ngoài project, không bao giờ bị commit vào git
+- Không cần ignore vì chúng ở trong thư mục home của user
+- Tự động được sử dụng cho tất cả AWS CLI commands
+
+#### Method 2: Environment Variables (Temporary)
 ```bash
-# Validate AWS setup
-./scripts/utilities/validate-aws-cli.sh
-
-# Test build dự án
-dotnet build RAG-System.slnx
+export AWS_ACCESS_KEY_ID=your_access_key_id
+export AWS_SECRET_ACCESS_KEY=your_secret_access_key
+export AWS_DEFAULT_REGION=ap-southeast-1
 ```
 
-### 2. Deploy Infrastructure (Lần Đầu)
+#### Method 3: AWS Profiles (Multiple accounts)
 ```bash
-# Deploy RDS PostgreSQL (Public Access)
-./scripts/infrastructure/provision-rds.sh \
-  --environment production \
-  --project-name rag-system \
-  --instance-class db.t3.micro \
-  --storage 20
-
-# Deploy Lambda Function (No VPC)
-./scripts/infrastructure/provision-lambda.sh \
-  --environment production \
-  --project-name rag-system \
-  --memory 1024 \
-  --timeout 30
+aws configure --profile <profile-name>
+export AWS_PROFILE=<profile-name>
 ```
 
-### 3. Deploy Application Code
+#### Method 4: IAM Roles (EC2/Lambda instances)
+- Attach IAM role to EC2 instance
+- No additional configuration needed
+
+#### Method 5: AWS SSO (Organizations)
 ```bash
-# Full deployment (infrastructure + application)
-./scripts/deploy.sh \
-  --mode initial \
-  --environment production \
-  --project-name rag-system \
-  --aws-region ap-southeast-1
-
-# Update deployment (code only)
-./scripts/deploy.sh \
-  --mode update \
-  --environment production \
-  --project-name rag-system
+aws configure sso
 ```
 
-### 4. Database Setup
+**🔍 Kiểm tra credentials đã cấu hình:**
 ```bash
-# Run migrations
-./scripts/migration/run-migrations.sh \
-  --environment production
-
-# Seed initial data (if needed)
-./scripts/migration/seed-data.sh \
-  --environment production
+aws sts get-caller-identity
+./scripts/tests/test-credential-detection.sh
 ```
 
-## 🔧 Lợi Ích Của Kiến Trúc Không VPC
+### AWS Permissions Required
+```bash
+aws configure sso
+```
 
-### RDS Public Access
-- ✅ Frontend có thể kết nối trực tiếp từ browser (với CORS)
-- ✅ Developers có thể kết nối từ local development
-- ✅ Không cần bastion host hoặc VPN
-- ✅ Đơn giản hóa network configuration
+**Verification**: Test your credentials with:
+```bash
+aws sts get-caller-identity
+```
 
-### Lambda No VPC
-- ✅ Cold start nhanh hơn (không có VPC overhead)
-- ✅ Truy cập trực tiếp AWS services (Cognito, S3, etc.)
-- ✅ Có thể gọi external APIs mà không cần NAT Gateway
-- ✅ Giảm complexity và cost
+**Note**: The scripts will automatically detect and use whichever credential method you have configured. You don't need to run `aws configure` if you already have credentials set up via environment variables, profiles, or IAM roles.
 
-### Security Considerations
-- 🔒 RDS security group chỉ mở port 5432
-- 🔒 Strong password generation và SSL required
-- 🔒 Lambda IAM role với least privilege
-- 🔒 Cognito authentication cho API access
+### AWS Permissions
 
-## 🔍 Connection Strings và Configuration
+Your AWS user/role needs the following permissions:
 
-### Database Connection String
+- **RDS**: Full access for database creation and management
+- **Lambda**: Full access for function deployment and configuration
+- **API Gateway**: Full access for API creation and management
+- **IAM**: Permissions to create and manage service roles
+- **CloudWatch**: Access for logging and monitoring
+
+### Configuration Files
+
+The deployment system uses two main configuration files:
+
+1. **`deployment-config.env`** - **Deployment parameters and infrastructure settings**
+2. **`RAG.APIs/appsettings.json`** - **Application configuration and database settings**
+
+#### Deployment Configuration (`deployment-config.env`)
+
+This file contains all deployment parameters:
+
+```bash
+# Basic settings
+ENVIRONMENT=dev
+PROJECT_NAME=myapp
+AWS_DEFAULT_REGION=ap-southeast-1
+
+# Lambda settings
+LAMBDA_RUNTIME=dotnet10
+LAMBDA_MEMORY_SIZE=512
+LAMBDA_TIMEOUT=30
+
+# RDS settings
+RDS_INSTANCE_CLASS=db.t3.micro
+RDS_ALLOCATED_STORAGE=20
+RDS_MULTI_AZ=false
+
+# Deployment options
+SKIP_TESTS=false
+SKIP_SEEDING=false
+```
+
+#### Application Configuration (`appsettings.json`)
+
+This file contains application-specific settings:
+
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Host=<RDS_ENDPOINT>;Database=appdb;Username=dbadmin;Password=<PASSWORD>;Port=5432;SSL Mode=Require;"
+    "DefaultConnection": "Host=localhost;Port=5432;Database=RAGSystem;Username=postgres;Password=12345678"
   },
   "AWS": {
     "Region": "ap-southeast-1",
-    "Cognito": {
-      "UserPoolId": "<USER_POOL_ID>",
-      "ClientId": "<CLIENT_ID>"
-    }
+    "UserPoolId": "your-user-pool-id",
+    "ClientId": "your-client-id"
   }
 }
 ```
 
-### Frontend Configuration
-```javascript
-// Frontend có thể kết nối trực tiếp RDS (nếu cần)
-const dbConfig = {
-  host: '<RDS_ENDPOINT>',
-  database: 'appdb',
-  port: 5432,
-  ssl: { rejectUnauthorized: false }
-};
+#### Managing Configuration
 
-// Lambda API endpoint
-const apiEndpoint = 'https://<LAMBDA_FUNCTION_URL>';
-```
+Use the configuration management script:
 
-## 📋 Deployment Workflow
-
-### Development → Staging → Production
 ```bash
-# 1. Development (Local)
-dotnet run --project RAG.APIs
-# Test với local database hoặc staging database
+# Show current configuration
+./scripts/manage-config.sh show
 
-# 2. Deploy to Staging
-./scripts/deploy.sh --mode initial --environment staging --project-name rag-system-staging
+# Create environment-specific configurations
+./scripts/manage-config.sh create --template production --output ./production-config.env
 
-# 3. Test Staging
-curl https://<staging-lambda-url>/swagger
-# Test all API endpoints
+# Validate configuration
+./scripts/manage-config.sh validate
 
-# 4. Deploy to Production  
-./scripts/deploy.sh --mode initial --environment production --project-name rag-system
-
-# 5. Verify Production
-curl https://<production-lambda-url>/health
+# Edit configuration
+./scripts/manage-config.sh edit
 ```
 
-### Update Workflow
+## 🚀 Quick Start
+
+For a complete deployment with default settings:
+
 ```bash
-# 1. Code changes
-git pull origin main
+# Navigate to the backend directory
+cd code/TestDeployLambda/BE
 
-# 2. Build and test
-dotnet build RAG-System.slnx
-
-# 3. Update staging
-./scripts/deploy.sh --mode update --environment staging --project-name rag-system-staging
-
-# 4. Test staging
-# Run integration tests
-
-# 5. Update production
-./scripts/deploy.sh --mode update --environment production --project-name rag-system
+# Run full stack deployment
+./scripts/deploy-full-stack.sh
 ```
 
-## 🔍 Monitoring và Troubleshooting
+This will deploy everything with default settings:
+- Environment: `dev`
+- Project: `myapp`
+- All components included
 
-### Xem Logs
+## 📖 Detailed Deployment Steps
+
+### Step 1: Deploy RDS Database
+
 ```bash
-# Deployment logs (organized in logs/ directory)
-ls -la logs/
-cat logs/deployment_*.log
-
-# Lambda logs trên AWS
-aws logs tail /aws/lambda/rag-system-production-api --follow
-
-# RDS logs
-aws rds describe-db-log-files --db-instance-identifier rag-system-production-db
+./scripts/infrastructure/provision-rds.sh --environment dev --project-name myapp
 ```
 
-### Health Check Scripts
+**What this does:**
+- Creates RDS PostgreSQL instance
+- Configures security groups for Lambda access
+- Sets up database with credentials from appsettings.json
+- Creates deployment checkpoint for tracking
+
+**Expected Output:**
+- RDS instance identifier: `myapp-dev-db`
+- Database endpoint saved to checkpoint file
+- Database ready for connections
+
+### Step 2: Deploy Lambda Function
+
 ```bash
-# Check infrastructure status
-./scripts/utilities/check-infrastructure.sh \
-  --environment production \
-  --project-name rag-system
+# Provision Lambda infrastructure
+./scripts/infrastructure/provision-lambda.sh --environment dev --project-name myapp
 
-# Test database connectivity
-psql -h <RDS_ENDPOINT> -U dbadmin -d appdb -c "SELECT version();"
-
-# Test Lambda function
-aws lambda invoke \
-  --function-name rag-system-production-api \
-  --payload '{"test": "health-check"}' \
-  response.json
+# Deploy application code
+./scripts/deployment/deploy-lambda.sh --environment dev --project-name myapp
 ```
 
-### Common Issues và Solutions
+**What this does:**
+- Creates IAM role for Lambda execution
+- Provisions Lambda function with .NET 10 runtime
+- Builds and packages .NET application
+- Deploys code to Lambda
+- Configures environment variables
 
-#### 1. RDS Connection Issues
+**Expected Output:**
+- Lambda function: `myapp-dev-api`
+- Function ARN saved to checkpoint
+- Application ready to receive requests
+
+### Step 3: Run Database Migrations
+
 ```bash
-# Check security group
-aws ec2 describe-security-groups \
-  --filters "Name=group-name,Values=rag-system-production-rds-sg"
-
-# Test connectivity
-telnet <RDS_ENDPOINT> 5432
-
-# Check RDS status
-aws rds describe-db-instances \
-  --db-instance-identifier rag-system-production-db
+./scripts/migration/run-migrations.sh --environment dev --project-name myapp
 ```
 
-#### 2. Lambda Cold Start Issues
+**What this does:**
+- Triggers Lambda function to run Entity Framework migrations
+- Creates all database tables and schema
+- Applies any pending migrations
+
+**Expected Output:**
+- Database schema created
+- Migration history table populated
+- All tables ready for data
+
+### Step 4: Trigger DbInitializer
+
 ```bash
-# Increase memory allocation
-aws lambda update-function-configuration \
-  --function-name rag-system-production-api \
-  --memory-size 1024
-
-# Check execution duration
-aws logs filter-log-events \
-  --log-group-name /aws/lambda/rag-system-production-api \
-  --filter-pattern "REPORT"
+./scripts/database/trigger-db-initializer.sh --function-name myapp-dev-api
 ```
 
-#### 3. Build/Deployment Issues
+**What this does:**
+- Triggers Lambda function to run DbInitializer
+- DbInitializer automatically seeds:
+  - **Admin and Analyst roles**
+  - **5 analytics types** (RISK, TREND, COMPARISON, OPPORTUNITY, EXECUTIVE)
+  - **Default users** in both AWS Cognito and Database:
+    - `admin@rag.com` → Admin role
+    - `analyst@rag.com` → Analyst role
+  - **User synchronization** between Cognito and Database
+
+**Expected Output:**
+- 2 roles created (Admin, Analyst)
+- 5 analytics types created
+- 2 default users created in both Cognito and Database
+- Users properly linked with roles
+
+### Step 5: Deploy API Gateway
+
 ```bash
-# Clean build
-dotnet clean RAG-System.slnx
-dotnet restore RAG-System.slnx
-dotnet build RAG-System.slnx --configuration Release
-
-# Check deployment package
-unzip -l rag-system-deployment.zip | head -20
+./scripts/infrastructure/provision-api-gateway.sh --environment dev --project-name myapp
 ```
 
-## 🎯 Production Checklist
+**What this does:**
+- Creates REST API Gateway
+- Configures Lambda integration
+- Sets up CORS for frontend access
+- Creates deployment stage
 
-### Pre-Deployment
-- [ ] AWS CLI configured và tested
-- [ ] Code reviewed và merged
-- [ ] Local build successful
-- [ ] Database migrations tested on staging
-- [ ] Environment variables configured
+**Expected Output:**
+- API Gateway URL available
+- Swagger documentation accessible
+- API ready for client requests
 
-### Deployment
-- [ ] RDS instance provisioned
-- [ ] Lambda function created
-- [ ] Database migrations applied
-- [ ] Application code deployed
-- [ ] Environment variables updated
+### Step 6: Run Tests
 
-### Post-Deployment
-- [ ] API endpoints responding
-- [ ] Database connectivity verified
-- [ ] CloudWatch logs showing no errors
-- [ ] Performance metrics within acceptable range
-- [ ] Security groups properly configured
+```bash
+# Test Lambda-RDS connection
+./scripts/tests/test-lambda-db-connection.sh
 
-## 💡 Best Practices
+# Test API endpoints
+./scripts/testing/test-api.sh
 
-### Security
-- Use strong passwords for RDS
-- Enable SSL/TLS for all connections
-- Regularly rotate credentials
-- Monitor CloudWatch for suspicious activity
-- Use least privilege IAM policies
+# Test user roles and authentication
+./scripts/testing/test-user-roles.sh
+```
 
-### Performance
-- Monitor Lambda cold starts
-- Optimize database queries
-- Use connection pooling
-- Consider provisioned concurrency for high-traffic functions
+**What this does:**
+- Verifies Lambda can connect to RDS
+- Tests API endpoints are responding
+- Validates authentication and authorization
+- Confirms role-based access control
 
-### Cost Optimization
-- Use appropriate instance sizes
-- Monitor AWS costs regularly
-- Clean up unused resources
-- Use reserved instances for predictable workloads
+## ⚙️ Configuration
+
+### Environment Variables
+
+The deployment uses these key environment variables:
+
+```bash
+# Deployment Configuration
+ENVIRONMENT=dev                    # dev, staging, production
+PROJECT_NAME=myapp                # Your project name
+SKIP_TESTS=false                  # Skip tests during deployment
+SKIP_SEEDING=false               # Skip database seeding
+
+# AWS Configuration (from appsettings.json)
+AWS__Region=ap-southeast-1
+AWS__UserPoolId=your-user-pool-id
+AWS__ClientId=your-client-id
+```
+
+### Database Configuration
+
+Database settings are read from `appsettings.json`:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=RAGSystem;Username=postgres;Password=12345678"
+  }
+}
+```
+
+**Note**: The deployment scripts automatically replace `localhost` with the actual RDS endpoint.
+
+### Custom Deployment Options
+
+```bash
+# Production deployment
+./scripts/deploy-full-stack.sh --environment production --project-name myrag
+
+# Development without tests
+./scripts/deploy-full-stack.sh --skip-tests
+
+# Deployment without seeding (for existing databases)
+./scripts/deploy-full-stack.sh --skip-seeding
+```
+
+## 🧪 Testing
+
+### Default User Accounts
+
+After deployment, these accounts are available:
+
+| Email             | Password        | Role    | Access Level                       |
+| ----------------- | --------------- | ------- | ---------------------------------- |
+| `admin@rag.com`   | `Admin@123!!`   | Admin   | Full access to all endpoints       |
+| `analyst@rag.com` | `Analyst@123!!` | Analyst | Limited access, no admin endpoints |
+
+### API Endpoints
+
+The deployed API provides these key endpoints:
+
+- **Swagger Documentation**: `{API_URL}/swagger`
+- **Authentication**: `{API_URL}/api/auth/login`
+- **User Registration**: `{API_URL}/api/auth/register`
+- **Admin Panel**: `{API_URL}/api/admin/users` (Admin only)
+
+### Testing Commands
+
+```bash
+# Test login with admin account
+curl -X POST "{API_URL}/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@rag.com","password":"Admin@123!!"}'
+
+# Test admin endpoint (requires admin token)
+curl -H "Authorization: Bearer {ACCESS_TOKEN}" \
+  "{API_URL}/api/admin/users"
+```
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+#### 1. Lambda Function Not Found
+```
+Error: Lambda function not found: myapp-dev-api
+```
+**Solution**: Deploy Lambda infrastructure first:
+```bash
+./scripts/infrastructure/provision-lambda.sh
+```
+
+#### 2. Database Connection Failed
+```
+Error: Could not connect to database
+```
+**Solutions**:
+- Check RDS instance is running
+- Verify security group allows Lambda access
+- Confirm connection string is correct
+
+#### 3. Roles Not Found Error
+```
+Error: Hệ thống chưa có Role 'Analyst'
+```
+**Solution**: Run database seeding:
+```bash
+./scripts/database/seed-roles-direct.sh
+./scripts/database/seed-default-users.sh
+```
+
+#### 4. AWS Permissions Denied
+```
+Error: User is not authorized to perform: lambda:GetFunction
+```
+**Solution**: Ensure your AWS user has the required permissions listed in Prerequisites.
+
+### Debugging Steps
+
+1. **Check deployment logs**:
+   ```bash
+   ls -la logs/
+   tail -f logs/deployment_*.log
+   ```
+
+2. **Verify AWS resources**:
+   ```bash
+   aws rds describe-db-instances --db-instance-identifier myapp-dev-db
+   aws lambda get-function --function-name myapp-dev-api
+   ```
+
+3. **Test database connectivity**:
+   ```bash
+   psql "postgresql://postgres:password@endpoint:5432/RAGSystem"
+   ```
+
+4. **Check Lambda logs**:
+   ```bash
+   aws logs tail /aws/lambda/myapp-dev-api --follow
+   ```
+
+## 🧹 Cleanup
+
+### Clean Temporary Files
+
+```bash
+# Clean temporary files only
+./scripts/cleanup-deployment.sh
+
+# Clean everything except AWS resources
+./scripts/cleanup-deployment.sh --all
+
+# Clean specific categories
+./scripts/cleanup-deployment.sh --clean-logs --clean-temp
+```
+
+### Destroy AWS Resources
+
+**⚠️ WARNING**: This will permanently delete all AWS resources!
+
+```bash
+# Destroy all AWS resources
+./scripts/cleanup-deployment.sh --destroy-aws --environment dev --project-name myapp
+```
+
+This will delete:
+- RDS database instance
+- Lambda function
+- API Gateway
+- IAM roles
+
+## 📁 File Structure
+
+After deployment, your file structure will look like this:
+
+```
+code/TestDeployLambda/BE/
+├── scripts/
+│   ├── deploy-full-stack.sh          # Master deployment script
+│   ├── cleanup-deployment.sh         # Cleanup script
+│   ├── database/                     # Database seeding scripts
+│   │   ├── seed-roles-direct.sh
+│   │   └── seed-default-users.sh
+│   ├── deployment/                   # Application deployment
+│   ├── infrastructure/               # AWS infrastructure
+│   ├── migration/                    # Database migrations
+│   │   └── run-migrations.sh
+│   ├── setup/                        # Setup and configuration scripts
+│   │   └── setup-deployment.sh
+│   ├── testing/                      # Test scripts
+│   │   ├── test-api.sh
+│   │   └── test-user-roles.sh
+│   ├── tests/                        # Integration tests
+│   ├── temp/                         # Temporary files (JSON, build artifacts)
+│   └── utilities/                    # Shared utilities
+├── deployment_checkpoints/           # Deployment state files
+├── logs/                            # Deployment logs
+└── RAG.APIs/                        # Application source code
+```
+
+## 🎯 Next Steps
+
+After successful deployment:
+
+1. **Configure Frontend**: Update frontend configuration to use the API Gateway URL
+2. **Set up CI/CD**: Implement automated deployment pipeline
+3. **Monitor**: Set up CloudWatch alarms and monitoring
+4. **Security**: Review and harden security settings for production
+5. **Backup**: Configure automated database backups
+6. **SSL**: Set up custom domain with SSL certificate
 
 ## 📞 Support
 
-Nếu gặp vấn đề:
-1. Check logs: `cat deployment_errors.log`
-2. Validate AWS: `./scripts/utilities/validate-aws-cli.sh`
-3. Check infrastructure: `./scripts/utilities/check-infrastructure.sh`
-4. Review AWS Console để kiểm tra resources
+If you encounter issues:
+
+1. Check the troubleshooting section above
+2. Review deployment logs in the `logs/` directory
+3. Verify AWS resource status in the AWS Console
+4. Check application logs in CloudWatch
+
+---
+
+**Last Updated**: March 2026  
+**Version**: 2.0  
+**Deployment Architecture**: AWS Lambda + RDS + API Gateway

@@ -4,8 +4,33 @@
 # Checks AWS CLI installation, credentials, and permissions before deployment operations
 
 # Source logging utility
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/logging.sh"
+VALIDATE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$VALIDATE_SCRIPT_DIR/logging.sh"
+
+# Function to get AWS region using flexible detection
+get_aws_region() {
+    local region=""
+    
+    # Method 1: AWS CLI configuration
+    if aws configure get region &>/dev/null; then
+        region=$(aws configure get region)
+    # Method 2: AWS_DEFAULT_REGION environment variable
+    elif [[ -n "${AWS_DEFAULT_REGION:-}" ]]; then
+        region="$AWS_DEFAULT_REGION"
+    # Method 3: AWS_REGION environment variable
+    elif [[ -n "${AWS_REGION:-}" ]]; then
+        region="$AWS_REGION"
+    # Method 4: Try to get from AWS profile if set
+    elif [[ -n "${AWS_PROFILE:-}" ]] && aws configure get region --profile "$AWS_PROFILE" &>/dev/null; then
+        region=$(aws configure get region --profile "$AWS_PROFILE")
+    # Method 5: Default fallback
+    else
+        region="us-east-1"
+        log_debug "No AWS region configured, using default: $region"
+    fi
+    
+    echo "$region"
+}
 
 # Function to check if AWS CLI is installed
 check_aws_cli_installation() {
@@ -26,8 +51,47 @@ check_aws_cli_installation() {
 check_aws_credentials() {
     log_info "Checking AWS credentials configuration..."
     
-    # Check if credentials are configured
-    if ! aws sts get-caller-identity &> /dev/null; then
+    # Try multiple methods to detect credentials
+    local credentials_found=false
+    local credential_method=""
+    
+    # Method 1: Try aws sts get-caller-identity (most reliable)
+    if aws sts get-caller-identity &> /dev/null; then
+        credentials_found=true
+        credential_method="AWS CLI/STS"
+    # Method 2: Check environment variables
+    elif [[ -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
+        credentials_found=true
+        credential_method="Environment Variables"
+        log_info "AWS credentials found via environment variables"
+        # Try to verify they work
+        if ! aws sts get-caller-identity &> /dev/null; then
+            log_warn "Environment variables are set but credentials may be invalid"
+        fi
+    # Method 3: Check AWS profile
+    elif [[ -n "${AWS_PROFILE:-}" ]]; then
+        credential_method="AWS Profile: $AWS_PROFILE"
+        if aws sts get-caller-identity --profile "$AWS_PROFILE" &> /dev/null; then
+            credentials_found=true
+            log_info "AWS credentials found via profile: $AWS_PROFILE"
+        else
+            log_error "AWS profile '$AWS_PROFILE' is not valid or accessible"
+            provide_credential_setup_instructions
+            return 1
+        fi
+    # Method 4: Check if credentials files exist
+    elif [[ -f "$HOME/.aws/credentials" || -f "$HOME/.aws/config" ]]; then
+        credential_method="AWS Credentials File"
+        log_info "AWS credentials file found, but unable to verify access"
+        log_warn "This might be due to:"
+        log_warn "  - Expired credentials"
+        log_warn "  - Incorrect region configuration"  
+        log_warn "  - Network connectivity issues"
+        log_warn "Continuing - will fail later if credentials are invalid"
+        credentials_found=true
+    fi
+    
+    if [ "$credentials_found" = false ]; then
         log_error "AWS credentials are not configured or invalid"
         echo ""
         echo "=== AWS Credentials Setup Required ==="
@@ -35,45 +99,52 @@ check_aws_credentials() {
         return 1
     fi
     
-    # Get detailed caller identity information
-    local caller_identity=$(aws sts get-caller-identity 2>/dev/null)
-    local user_arn=$(echo "$caller_identity" | grep -o '"Arn": "[^"]*"' | cut -d'"' -f4)
-    local account_id=$(echo "$caller_identity" | grep -o '"Account": "[^"]*"' | cut -d'"' -f4)
-    local user_id=$(echo "$caller_identity" | grep -o '"UserId": "[^"]*"' | cut -d'"' -f4)
-    
-    # Determine credential type
-    local credential_type="Unknown"
-    local credential_source="Unknown"
-    
-    if [[ "$user_arn" == *":user/"* ]]; then
-        credential_type="IAM User"
-        credential_source="Access Keys"
-    elif [[ "$user_arn" == *":role/"* ]]; then
-        credential_type="IAM Role"
-        if [[ "$user_arn" == *"assumed-role"* ]]; then
-            credential_source="Assumed Role"
-        else
-            credential_source="Instance Profile"
+    # If we can get caller identity, show detailed info
+    if aws sts get-caller-identity &> /dev/null; then
+        # Get detailed caller identity information
+        local caller_identity=$(aws sts get-caller-identity 2>/dev/null)
+        local user_arn=$(echo "$caller_identity" | grep -o '"Arn": "[^"]*"' | cut -d'"' -f4)
+        local account_id=$(echo "$caller_identity" | grep -o '"Account": "[^"]*"' | cut -d'"' -f4)
+        local user_id=$(echo "$caller_identity" | grep -o '"UserId": "[^"]*"' | cut -d'"' -f4)
+        
+        # Determine credential type
+        local credential_type="Unknown"
+        local credential_source="Unknown"
+        
+        if [[ "$user_arn" == *":user/"* ]]; then
+            credential_type="IAM User"
+            credential_source="Access Keys"
+        elif [[ "$user_arn" == *":role/"* ]]; then
+            credential_type="IAM Role"
+            if [[ "$user_arn" == *"assumed-role"* ]]; then
+                credential_source="Assumed Role"
+            else
+                credential_source="Instance Profile"
+            fi
+        elif [[ "$user_arn" == *":root"* ]]; then
+            credential_type="Root Account"
+            credential_source="Root Access Keys"
+            log_warn "Using root account credentials is not recommended for security reasons"
         fi
-    elif [[ "$user_arn" == *":root"* ]]; then
-        credential_type="Root Account"
-        credential_source="Root Access Keys"
-        log_warn "Using root account credentials is not recommended for security reasons"
+        
+        log_success "AWS credentials are valid"
+        log_info "Credential Details:"
+        log_info "  Account ID: $account_id"
+        log_info "  User/Role ARN: $user_arn"
+        log_info "  User ID: $user_id"
+        log_info "  Credential Type: $credential_type"
+        log_info "  Credential Source: $credential_source"
+        log_info "  Detection Method: $credential_method"
+        
+        # Check credential age and provide security recommendations
+        check_credential_security "$credential_type"
+        
+        # Validate credential scope
+        validate_credential_scope "$user_arn"
+    else
+        log_success "AWS credentials detected via $credential_method"
+        log_info "Unable to verify credential details, but proceeding with deployment"
     fi
-    
-    log_success "AWS credentials are valid"
-    log_info "Credential Details:"
-    log_info "  Account ID: $account_id"
-    log_info "  User/Role ARN: $user_arn"
-    log_info "  User ID: $user_id"
-    log_info "  Credential Type: $credential_type"
-    log_info "  Credential Source: $credential_source"
-    
-    # Check credential age and provide security recommendations
-    check_credential_security "$credential_type"
-    
-    # Validate credential scope
-    validate_credential_scope "$user_arn"
     
     return 0
 }
@@ -203,7 +274,7 @@ check_aws_region() {
         region_source="AWS CLI profile"
     else
         # 2. Environment variable
-        region=$AWS_DEFAULT_REGION
+        region="${AWS_DEFAULT_REGION:-}"
         if [ -n "$region" ]; then
             region_source="AWS_DEFAULT_REGION environment variable"
         else
@@ -349,7 +420,7 @@ provide_region_info() {
     log_info "  Estimated latency from Vietnam: $latency"
     
     # Provide cost factor information
-    source "$SCRIPT_DIR/cost-optimization.sh" 2>/dev/null || true
+    source "$VALIDATE_SCRIPT_DIR/cost-optimization.sh" 2>/dev/null || true
     if declare -p REGIONAL_COST_FACTORS &>/dev/null; then
         local cost_factor="${REGIONAL_COST_FACTORS[$region]:-"Unknown"}"
         if [ "$cost_factor" != "Unknown" ]; then
@@ -1149,7 +1220,7 @@ main() {
 }
 
 # Export functions for use in other scripts
-export -f check_aws_cli_installation check_aws_credentials check_aws_region
+export -f get_aws_region check_aws_cli_installation check_aws_credentials check_aws_region
 export -f check_aws_permissions validate_aws_profile validate_aws_cli
 export -f show_aws_setup_instructions list_aws_profiles run_aws_diagnostics
 export -f provide_credential_setup_instructions provide_region_recommendations

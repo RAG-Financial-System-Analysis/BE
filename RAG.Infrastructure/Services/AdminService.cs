@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RAG.Application.Interfaces;
+using RAG.Domain;
 using RAG.Domain.DTOs.Admin;
 using RAG.Infrastructure.Database;
 using System;
@@ -91,14 +92,14 @@ namespace RAG.Infrastructure.Services
             // 3. Chat Sessions Statistics
             var chatsQuery = _dbContext.ChatSessions.AsNoTracking();
             var totalChats = await chatsQuery.CountAsync();
-            
-            var today = DateTime.UtcNow.Date;
+
+            var today = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Unspecified);
             var activeTodayChats = await chatsQuery.CountAsync(c => c.Createdat >= today);
 
             // 4. Storage Statistics
             var totalSizeKb = await reportsQuery.SumAsync(r => (long)(r.Filesizekb ?? 0));
             var totalSizeGb = totalSizeKb / (double)(1024 * 1024);
-            var filesCount = totalReports; 
+            var filesCount = totalReports;
 
             return new SystemStatisticsResponse
             {
@@ -125,6 +126,193 @@ namespace RAG.Infrastructure.Services
                     FilesCount = filesCount
                 }
             };
+        }
+        public async Task<CreateReportCategoriesResponse> CreateReportCategoryAsync(CreateReportCategoriesRequest request)
+        {
+            var exists = await _dbContext.ReportCategories.AnyAsync(c => c.Name == request.Name);
+            if (exists)
+            {
+                throw new ArgumentException("Name already exists");
+            }
+
+            var category = new ReportCategory
+            {
+                Id = Guid.NewGuid(),
+                Name = request.Name,
+                Description = request.Description
+            };
+            _dbContext.ReportCategories.Add(category);
+            await _dbContext.SaveChangesAsync();
+            return new CreateReportCategoriesResponse
+            {
+                Id = category.Id,
+                Message = "Report category created successfully"
+            };
+        }
+
+        public async Task<GetReportCategoriesResponse> GetReportCategoriesAsync(int page, int pageSize)
+        {
+            var query = _dbContext.ReportCategories.AsNoTracking();
+            var total = await query.CountAsync();
+            
+            var data = await query
+                .Select(c => new ReportCategoryDto
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    Description = c.Description,
+                    AssociatedReportsCount = c.ReportFinancials.Count
+                })
+                .OrderBy(c => c.Name)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return new GetReportCategoriesResponse
+            {
+                Total = total,
+                Page = page,
+                PageSize = pageSize,
+                Data = data
+            };
+        }
+
+        public async Task<GetReportCategoryByIdResponse> GetReportCategoryByIdAsync(Guid id)
+        {
+            var category = await _dbContext.ReportCategories
+                .AsNoTracking()
+                .Include(c => c.ReportFinancials)
+                    .ThenInclude(r => r.Company)
+                .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (category == null)
+                throw new KeyNotFoundException("Report category not found");
+
+            return new GetReportCategoryByIdResponse
+            {
+                Id = category.Id,
+                Name = category.Name,
+                Description = category.Description,
+                AssociatedReportsCount = category.ReportFinancials.Count,
+                AssociatedReports = category.ReportFinancials.Select(r => new AssociatedReportDto
+                {
+                    Id = r.Id,
+                    Title = r.Filename ?? $"{r.Company.Name} {r.Period}/{r.Year}",
+                    CompanyName = r.Company.Name ?? string.Empty,
+                    CreatedAt = r.Createdat
+                }).ToList()
+            };
+        }
+
+        public async Task UpdateReportCategoryAsync(Guid id, UpdateReportCategoryRequest request)
+        {
+            var category = await _dbContext.ReportCategories.FindAsync(id);
+            if (category == null)
+                throw new KeyNotFoundException("Report category not found");
+
+            var nameExists = await _dbContext.ReportCategories
+                .AnyAsync(c => c.Name == request.Name && c.Id != id);
+            if (nameExists)
+                throw new ArgumentException("Name already exists");
+
+            category.Name = request.Name;
+            category.Description = request.Description;
+
+            _dbContext.ReportCategories.Update(category);
+            await _dbContext.SaveChangesAsync();
+        }
+
+        public async Task DeleteReportCategoryAsync(Guid id)
+        {
+            var category = await _dbContext.ReportCategories
+                .Include(c => c.ReportFinancials)
+                .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (category == null)
+                throw new KeyNotFoundException("Report category not found");
+
+            if (category.ReportFinancials.Any())
+                throw new InvalidOperationException("Cannot delete report category because it has associated financial reports");
+
+            _dbContext.ReportCategories.Remove(category);
+            await _dbContext.SaveChangesAsync();
+        }
+
+        public async Task<GetReportCategoriesForAnalystResponse> GetReportCategoriesForAnalystAsync()
+        {
+            var categories = await _dbContext.ReportCategories
+                .AsNoTracking()
+                .OrderBy(c => c.Name)
+                .Select(c => new ReportCategorySimpleDto
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    Description = c.Description
+                })
+                .ToListAsync();
+
+            return new GetReportCategoriesForAnalystResponse { Categories = categories };
+        }
+
+        public async Task<CreateAnalyticsTypeResponse> CreateAnalyticsTypeAsync(CreateAnalyticsTypeRequest request)
+        {
+            var exists = await _dbContext.AnalyticsTypes.AnyAsync(t => t.Code == request.Code);
+            if (exists)
+                throw new ArgumentException("Code already exists");
+
+            var analyticsType = new AnalyticsType
+            {
+                Id = Guid.NewGuid(),
+                Code = request.Code,
+                Name = request.Name,
+                Description = request.Description,
+                Createdat = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+            };
+
+            _dbContext.AnalyticsTypes.Add(analyticsType);
+            await _dbContext.SaveChangesAsync();
+
+            return new CreateAnalyticsTypeResponse
+            {
+                Id = analyticsType.Id,
+                Message = "Analytics type created successfully"
+            };
+        }
+
+        public async Task UpdateAnalyticsTypeAsync(Guid id, UpdateAnalyticsTypeRequest request)
+        {
+            var analyticsType = await _dbContext.AnalyticsTypes.FindAsync(id);
+            if (analyticsType == null)
+                throw new KeyNotFoundException("Analytics type not found");
+
+            var codeExists = await _dbContext.AnalyticsTypes
+                .AnyAsync(t => t.Code == request.Code && t.Id != id);
+            if (codeExists)
+                throw new ArgumentException("Code already exists");
+
+            analyticsType.Code = request.Code;
+            analyticsType.Name = request.Name;
+            analyticsType.Description = request.Description;
+            // Createdat is not updated intentionally
+
+            _dbContext.AnalyticsTypes.Update(analyticsType);
+            await _dbContext.SaveChangesAsync();
+        }
+
+        public async Task DeleteAnalyticsTypeAsync(Guid id)
+        {
+            var analyticsType = await _dbContext.AnalyticsTypes
+                .Include(t => t.ChatSessions)
+                .FirstOrDefaultAsync(t => t.Id == id);
+
+            if (analyticsType == null)
+                throw new KeyNotFoundException("Analytics type not found");
+
+            if (analyticsType.ChatSessions.Any())
+                throw new InvalidOperationException("Cannot delete analytics type with associated chat sessions");
+
+            _dbContext.AnalyticsTypes.Remove(analyticsType);
+            await _dbContext.SaveChangesAsync();
         }
     }
 }

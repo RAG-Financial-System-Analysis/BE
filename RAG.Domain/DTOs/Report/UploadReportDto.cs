@@ -33,6 +33,7 @@ namespace RAG.Domain.DTOs.Report
         public string Message { get; set; } = null!;
         public int MetricsExtracted { get; set; }
         public int PageCount { get; set; }
+        public string PdfType { get; set; } = string.Empty; // NEW: PDF type info
         public List<MetricResponse>? Metrics { get; set; }
     }
 

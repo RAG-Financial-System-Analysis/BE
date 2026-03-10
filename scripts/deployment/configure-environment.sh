@@ -27,7 +27,7 @@ DRY_RUN="${DRY_RUN:-false}"
 
 # Resource naming
 ENVIRONMENT="${ENVIRONMENT:-dev}"
-PROJECT_NAME="${PROJECT_NAME:-myapp}"
+PROJECT_NAME="${PROJECT_NAME:-myragapp}"
 LAMBDA_FUNCTION_NAME="$PROJECT_NAME-$ENVIRONMENT-api"
 
 # Global variables

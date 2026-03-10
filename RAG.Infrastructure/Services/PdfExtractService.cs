@@ -12,37 +12,124 @@ namespace RAG.Infrastructure.Services
 {
     public class PdfExtractService : IPdfExtractService
     {
+        private readonly IGeminiService _geminiService;
+
+        public PdfExtractService(IGeminiService geminiService)
+        {
+            _geminiService = geminiService;
+        }
         public async Task<ExtractResultDto> ExtractAllAsync(IFormFile file)
         {
-            return await Task.Run(() =>
+            using var stream = file.OpenReadStream();
+            using var reader = new PdfReader(stream);
+            using var pdfDoc = new PdfDocument(reader);
+
+            // BƯỚC 1: DETECT PDF TYPE
+            var pdfType = DetectPdfType(pdfDoc);
+            
+            string fullText;
+            
+            if (pdfType == PdfType.TextBased)
             {
-                using var stream = file.OpenReadStream();
-                using var reader = new PdfReader(stream);
-                using var pdfDoc = new PdfDocument(reader);
-
-                // BƯỚC 1: Extract text
-                var text = new StringBuilder();
-                for (int i = 1; i <= pdfDoc.GetNumberOfPages(); i++)
+                // BƯỚC 2A: Extract text bình thường
+                fullText = ExtractTextFromTextBasedPdf(pdfDoc);
+            }
+            else
+            {
+                // BƯỚC 2B: Xử lý PDF ảnh với Gemini Vision
+                try
                 {
-                    var page = pdfDoc.GetPage(i);
-                    var strategy = new SimpleTextExtractionStrategy();
-                    var pageText = PdfTextExtractor.GetTextFromPage(page, strategy);
-                    text.AppendLine(pageText);
+                    // Convert IFormFile to byte array
+                    using var memoryStream = new MemoryStream();
+                    await file.CopyToAsync(memoryStream);
+                    var pdfBytes = memoryStream.ToArray();
+                    
+                    // Call Gemini Vision
+                    fullText = await _geminiService.ExtractTextFromPdfAsync(pdfBytes);
+                    
+                    if (string.IsNullOrWhiteSpace(fullText))
+                    {
+                        fullText = "[PDF ảnh - Gemini Vision không thể trích xuất text]";
+                    }
                 }
-
-                var fullText = text.ToString();
-
-                // BƯỚC 2: Extract metrics
-                var metrics = ExtractMetrics(fullText);
-
-                return new ExtractResultDto
+                catch (Exception ex)
                 {
-                    Text = fullText,
-                    Metrics = metrics,
-                    PageCount = pdfDoc.GetNumberOfPages(),
-                    FileSizeBytes = file.Length
-                };
-            });
+                    fullText = $"[PDF ảnh - Lỗi Gemini Vision: {ex.Message}]";
+                }
+            }
+
+            // BƯỚC 3: Extract metrics (nếu có text)
+            var metrics = string.IsNullOrWhiteSpace(fullText) || fullText.Contains("[PDF")
+                ? new List<MetricDto>()
+                : ExtractMetrics(fullText);
+
+            return new ExtractResultDto
+            {
+                Text = fullText,
+                Metrics = metrics,
+                PageCount = pdfDoc.GetNumberOfPages(),
+                FileSizeBytes = file.Length,
+                PdfType = pdfType.ToString() // Thêm info về PDF type
+            };
+        }
+
+        // DETECTION METHOD
+        private PdfType DetectPdfType(PdfDocument pdfDoc)
+        {
+            var totalPages = pdfDoc.GetNumberOfPages();
+            var textPages = 0;
+            var totalTextLength = 0;
+            
+            // Check tối đa 5 trang đầu để tăng tốc
+            var pagesToCheck = Math.Min(5, totalPages);
+            
+            for (int i = 1; i <= pagesToCheck; i++)
+            {
+                var page = pdfDoc.GetPage(i);
+                var strategy = new SimpleTextExtractionStrategy();
+                var pageText = PdfTextExtractor.GetTextFromPage(page, strategy);
+                
+                if (!string.IsNullOrWhiteSpace(pageText))
+                {
+                    // Loại bỏ whitespace và ký tự đặc biệt
+                    var cleanText = pageText.Trim().Replace("\n", "").Replace("\r", "").Replace(" ", "");
+                    
+                    if (cleanText.Length > 50) // Ít nhất 50 ký tự có nghĩa
+                    {
+                        textPages++;
+                        totalTextLength += cleanText.Length;
+                    }
+                }
+            }
+            
+            // LOGIC DETECTION
+            var textPageRatio = (double)textPages / pagesToCheck;
+            var avgTextPerPage = textPages > 0 ? totalTextLength / textPages : 0;
+            
+            // Nếu >70% trang có text và mỗi trang có >200 ký tự → Text-based
+            if (textPageRatio >= 0.7 && avgTextPerPage >= 200)
+            {
+                return PdfType.TextBased;
+            }
+            
+            // Ngược lại → Image-based
+            return PdfType.ImageBased;
+        }
+
+        // EXTRACT TEXT METHOD (tách riêng)
+        private string ExtractTextFromTextBasedPdf(PdfDocument pdfDoc)
+        {
+            var text = new StringBuilder();
+            
+            for (int i = 1; i <= pdfDoc.GetNumberOfPages(); i++)
+            {
+                var page = pdfDoc.GetPage(i);
+                var strategy = new SimpleTextExtractionStrategy();
+                var pageText = PdfTextExtractor.GetTextFromPage(page, strategy);
+                text.AppendLine(pageText);
+            }
+            
+            return text.ToString();
         }
 
         private List<MetricDto> ExtractMetrics(string text)
@@ -172,4 +259,11 @@ namespace RAG.Infrastructure.Services
             }
         }
     }
+}
+
+// ENUM cho PDF type
+public enum PdfType
+{
+    TextBased,    // PDF có text layer
+    ImageBased    // PDF chỉ có ảnh (scanned)
 }

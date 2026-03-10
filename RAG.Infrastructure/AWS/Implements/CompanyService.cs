@@ -71,7 +71,7 @@ namespace RAG.Infrastructure.AWS.Implements
                 Industry = request.Industry,
                 Description = request.Description,
                 Website = request.Website,
-                Createdat = DateTime.UtcNow.ToLocalTime()
+                Createdat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified)
             };
 
             await _companyRepository.AddAsync(company);
@@ -105,7 +105,7 @@ namespace RAG.Infrastructure.AWS.Implements
             existingCompany.Industry = request.Industry;
             existingCompany.Description = request.Description;
             existingCompany.Website = request.Website;
-            existingCompany.Updatedat = DateTime.UtcNow.ToLocalTime();
+            existingCompany.Updatedat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
 
             _companyRepository.Update(existingCompany);
 

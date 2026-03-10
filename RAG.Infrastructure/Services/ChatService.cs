@@ -28,8 +28,8 @@ namespace RAG.Infrastructure.Services
                 Userid = userId,
                 Analyticstypeid = request.AnalyticsTypeId,
                 Title = request.Title,
-                Starttime = DateTime.Now,
-                Createdat = DateTime.Now
+                Starttime = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified),
+                Createdat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified)
             };
 
             await _context.ChatSessions.AddAsync(newSession);
@@ -55,7 +55,7 @@ namespace RAG.Infrastructure.Services
                     Id = p.Id,
                     QuestionText = p.Questiontext,
                     ResponseText = p.Responsetext ?? "",
-                    CreatedAt = p.Createdat ?? DateTime.UtcNow
+                    CreatedAt = p.Createdat ?? DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified)
                 })
                 .ToListAsync();
 
@@ -68,17 +68,21 @@ namespace RAG.Infrastructure.Services
 
         public async Task<GetMySessionsResponse> GetMySessionsAsync(Guid userId)
         {
+            var fallback = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
+
             var sessions = await _context.ChatSessions
                 .Include(s => s.Analyticstype)
                 .Include(s => s.QuestionPrompts)
                 .Where(s => s.Userid == userId)
-                .OrderByDescending(s => s.Lastmessageat ?? s.Starttime)
+                // Sort by Lastmessageat first, then Starttime — avoids timestamp type mismatch from ?? coalesce
+                .OrderByDescending(s => s.Lastmessageat)
+                .ThenByDescending(s => s.Starttime)
                 .Select(s => new SessionItemDto
                 {
                     Id = s.Id,
                     Title = s.Title,
                     AnalyticsTypeName = s.Analyticstype != null ? s.Analyticstype.Name : "",
-                    StartTime = s.Starttime ?? DateTime.UtcNow,
+                    StartTime = s.Starttime ?? fallback,
                     LastMessageAt = s.Lastmessageat,
                     MessageCount = s.QuestionPrompts.Count
                 })

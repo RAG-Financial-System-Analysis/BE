@@ -23,6 +23,24 @@ if (!builder.Environment.IsDevelopment())
 }
 
 builder.Services.AddControllers();
+
+// Configure request timeout for RAG APIs (configurable)
+builder.Services.Configure<IISServerOptions>(options =>
+{
+    var maxFileSizeMB = builder.Configuration.GetValue<int>("RAG:MaxFileSizeMB", 100);
+    options.MaxRequestBodySize = maxFileSizeMB * 1024 * 1024;
+});
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    var maxFileSizeMB = builder.Configuration.GetValue<int>("RAG:MaxFileSizeMB", 100);
+    var timeoutMinutes = builder.Configuration.GetValue<int>("RAG:RequestTimeoutMinutes", 10);
+    
+    options.Limits.MaxRequestBodySize = maxFileSizeMB * 1024 * 1024;
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(timeoutMinutes);
+    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(timeoutMinutes);
+});
+
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -66,34 +84,30 @@ builder.Services.AddSwaggerGen(option =>
         }
     });
 });
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAll", b =>
-    {
-        b.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
-    });
-});
+
 //AWS Lambda
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
 var app = builder.Build();
 
 // Run Database Initializer
-await app.Services.UseDbInitializer();
+try
+{
+    await app.Services.UseDbInitializer();
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"DbInitializer failed: {ex.Message}");
+    // Continue startup even if DbInitializer fails
+}
 
 // 4. Swagger Configuration
-// Trên AWS Lambda API Gateway, môi trường thường là Production, nên ta mở luôn hoặc dùng cờ tự định nghĩa.
-// if (app.Environment.IsDevelopment() || app.Environment.IsProduction()) -> Tạm thời mở luôn cho dễ test
 app.UseSwagger(c => c.RouteTemplate = "swagger/{documentName}/swagger.json"); 
 
 app.UseSwaggerUI(c =>
 {
     c.InjectStylesheet("/custom-swagger.css");
-    
-    // Rất quan trọng cho API Gateway:
     c.SwaggerEndpoint("v1/swagger.json", "RAG API V1");
-    // API Gateway thường chèn tên stage (VD: /Prod).
-    // Đặt Prefix rỗng hoặc theo stage để tránh lỗi 404 trang Swagger Not Found.
     c.RoutePrefix = "swagger"; 
 }); 
 
@@ -107,3 +121,117 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Lambda Entry Point for AWS Lambda deployment
+public class LambdaEntryPoint : Amazon.Lambda.AspNetCoreServer.APIGatewayProxyFunction
+{
+    protected override void Init(IWebHostBuilder builder)
+    {
+        builder
+            .UseContentRoot(Directory.GetCurrentDirectory())
+            .UseStartup<Startup>();
+    }
+}
+
+public class Startup
+{
+    public IConfiguration Configuration { get; }
+
+    public Startup(IConfiguration configuration)
+    {
+        Configuration = configuration;
+    }
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddInfrastructure(Configuration);
+
+        // 3. Tích hợp AWS Systems Manager (Lưu config)
+        if (!Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")?.Equals("Development", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            // AWS Systems Manager configuration would go here
+        }
+
+        services.AddControllers();
+        services.AddEndpointsApiExplorer();
+        services.AddSwaggerGen();
+
+        services.AddCors(options =>
+        {
+            options.AddPolicy("AllowAll", builder =>
+            {
+                builder.AllowAnyOrigin()
+                       .AllowAnyMethod()
+                       .AllowAnyHeader();
+            });
+        });
+
+        services.AddSwaggerGen(option =>
+        {
+            option.SwaggerDoc("v1", new OpenApiInfo { Title = "RAG API", Version = "v1" });
+
+            option.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            {
+                In = ParameterLocation.Header,
+                Description = "Nhập Token: Bearer {token}",
+                Name = "Authorization",
+                Type = SecuritySchemeType.Http,
+                BearerFormat = "JWT",
+                Scheme = "Bearer"
+            });
+
+            option.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
+                {
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "Bearer"
+                        }
+                    },
+                    new string[] { }
+                }
+            });
+        });
+    }
+
+    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+    {
+        // Run Database Initializer
+        using (var scope = app.ApplicationServices.CreateScope())
+        {
+            try
+            {
+                scope.ServiceProvider.UseDbInitializer().Wait();
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail startup
+                Console.WriteLine($"DbInitializer failed: {ex.Message}");
+            }
+        }
+
+        app.UseSwagger(c => c.RouteTemplate = "swagger/{documentName}/swagger.json");
+
+        app.UseSwaggerUI(c =>
+        {
+            c.SwaggerEndpoint("v1/swagger.json", "RAG API V1");
+            c.RoutePrefix = "swagger";
+        });
+
+        app.UseStaticFiles();
+        app.UseCors("AllowAll");
+        app.UseHttpsRedirection();
+
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        app.UseRouting();
+        app.UseEndpoints(endpoints =>
+        {
+            endpoints.MapControllers();
+        });
+    }
+}

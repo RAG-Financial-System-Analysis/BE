@@ -34,7 +34,7 @@ scripts_to_test=(
     "infrastructure/provision-rds.sh"
     "infrastructure/provision-lambda.sh"
     "infrastructure/configure-iam.sh"
-    "deploy.sh"
+    "deploy-full-stack.sh"
 )
 
 syntax_errors=0
@@ -178,7 +178,7 @@ echo ""
 log_info "Test 7: Testing master deployment script integration..."
 
 # Test dry-run mode
-if bash "$SCRIPT_DIR/deploy.sh" --mode initial --environment "$TEST_ENVIRONMENT" --dry-run >/dev/null 2>&1; then
+if bash "$SCRIPT_DIR/deploy-full-stack.sh" --skip-tests --dry-run >/dev/null 2>&1; then
     log_success "✓ Master deployment script dry-run works"
 else
     log_error "✗ Master deployment script dry-run failed"
@@ -237,7 +237,7 @@ echo ""
 echo "Infrastructure scripts are functional and ready for use."
 echo ""
 echo "Next steps:"
-echo "1. Run actual infrastructure provisioning with: ./deploy.sh --mode initial --environment development"
+echo "1. Run actual infrastructure provisioning with: ./deploy-full-stack.sh"
 echo "2. Monitor logs for any runtime issues"
 echo "3. Validate created AWS resources"
 echo ""

@@ -16,7 +16,7 @@ source "$UTILITIES_DIR/validate-aws-cli.sh"
 
 # Configuration variables
 ENVIRONMENT="${ENVIRONMENT:-dev}"
-PROJECT_NAME="${PROJECT_NAME:-myapp}"
+PROJECT_NAME="${PROJECT_NAME:-myragapp}"
 FORCE_CLEANUP="${FORCE_CLEANUP:-false}"
 DRY_RUN="${DRY_RUN:-false}"
 CLEANUP_SCOPE="${CLEANUP_SCOPE:-all}"  # all, lambda, rds, iam, vpc

@@ -18,12 +18,13 @@ source "$UTILITIES_DIR/logging.sh"
 source "$UTILITIES_DIR/error-handling.sh"
 source "$UTILITIES_DIR/validate-aws-cli.sh"
 source "$UTILITIES_DIR/configure-cognito-iam.sh"
+source "$UTILITIES_DIR/parse-appsettings.sh"
 
 # Default configuration values (cost-optimized)
-DEFAULT_RUNTIME="dotnet8"  # Closest available to .NET 10
-DEFAULT_MEMORY_SIZE="512"  # Cost-optimized memory allocation
-DEFAULT_TIMEOUT="30"       # Reasonable timeout for database operations
-DEFAULT_HANDLER="TestDeployLambda::TestDeployLambda.LambdaEntryPoint::FunctionHandlerAsync"
+DEFAULT_RUNTIME="${LAMBDA_RUNTIME:-dotnet10}"  # .NET 10 runtime
+DEFAULT_MEMORY_SIZE="${LAMBDA_MEMORY_SIZE:-512}"  # Cost-optimized memory allocation
+DEFAULT_TIMEOUT="${LAMBDA_TIMEOUT:-30}"       # Reasonable timeout for database operations
+DEFAULT_HANDLER="${LAMBDA_HANDLER:-RAG.APIs::RAG.APIs.LambdaEntryPoint::FunctionHandlerAsync}"
 
 # Configuration variables
 RUNTIME="${RUNTIME:-$DEFAULT_RUNTIME}"
@@ -33,7 +34,7 @@ HANDLER="${HANDLER:-$DEFAULT_HANDLER}"
 
 # Resource naming
 ENVIRONMENT="${ENVIRONMENT:-dev}"
-PROJECT_NAME="${PROJECT_NAME:-myapp}"
+PROJECT_NAME="${PROJECT_NAME:-myragapp}"
 LAMBDA_FUNCTION_NAME="$PROJECT_NAME-$ENVIRONMENT-api"
 LAMBDA_ROLE_NAME="$PROJECT_NAME-$ENVIRONMENT-lambda-role"
 LAMBDA_POLICY_NAME="$PROJECT_NAME-$ENVIRONMENT-lambda-policy"
@@ -427,13 +428,14 @@ configure_lambda_environment() {
     
     # Add database connection string
     if [ "$db_endpoint" != "PLACEHOLDER_ENDPOINT" ]; then
-        local connection_string="Host=${db_endpoint};Database=appdb;Username=dbadmin;Password=${db_password};Port=5432;SSL Mode=Require;"
+        local connection_string="Host=${db_endpoint};Database=${APPSETTINGS_DB_NAME:-RAGSystem};Username=${APPSETTINGS_DB_USERNAME:-postgres};Password=${db_password};Port=5432;SSL Mode=Require;"
         env_vars="${env_vars},ConnectionStrings__DefaultConnection=$connection_string"
         log_info "Added database connection string to environment variables"
     fi
     
-    # Add AWS region
-    local aws_region=$(aws configure get region || echo "us-east-1")
+    # Add AWS region - use flexible region detection
+    source "$SCRIPT_DIR/../utilities/validate-aws-cli.sh"
+    local aws_region=$(get_aws_region)
     env_vars="${env_vars},AWS__Region=$aws_region"
     
     env_vars="${env_vars}}"
@@ -561,6 +563,15 @@ main() {
     
     # Parse command line arguments
     parse_arguments "$@"
+    
+    # Parse appsettings.json for database configuration
+    local appsettings_file="RAG.APIs/appsettings.json"
+    if [[ -f "$appsettings_file" ]]; then
+        log_info "Loading database configuration from appsettings.json: $appsettings_file"
+        parse_appsettings_db_config "$appsettings_file" || log_warn "Failed to parse appsettings.json"
+    else
+        log_warn "appsettings.json not found: $appsettings_file"
+    fi
     
     # Validate AWS CLI
     if ! validate_aws_cli "$AWS_PROFILE"; then

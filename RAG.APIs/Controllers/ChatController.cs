@@ -26,7 +26,7 @@ namespace RAG.APIs.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdClaim = User.FindFirst("internal_user_id")?.Value;
                 if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out Guid internalUserId))
                 {
                     return Unauthorized("User is not authenticated.");
@@ -51,7 +51,7 @@ namespace RAG.APIs.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdClaim = User.FindFirst("internal_user_id")?.Value;
                 if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out Guid internalUserId))
                 {
                     return Unauthorized("User is not authenticated.");
@@ -77,7 +77,7 @@ namespace RAG.APIs.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdClaim = User.FindFirst("internal_user_id")?.Value;
                 if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out Guid internalUserId))
                 {
                     return Unauthorized("User is not authenticated.");
@@ -102,7 +102,7 @@ namespace RAG.APIs.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdClaim = User.FindFirst("internal_user_id")?.Value;
                 if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out Guid internalUserId))
                 {
                     return Unauthorized("User is not authenticated.");

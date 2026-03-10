@@ -41,6 +41,7 @@ Mở file `.env` và điền các giá trị thật:
 # Bắt buộc phải sửa
 DB_PASSWORD=your_strong_password
 
+# AWS Configuration
 AWS_USER_POOL_ID=ap-southeast-1_XXXXXXXX
 AWS_CLIENT_ID=your_cognito_client_id
 AWS_ACCESS_KEY=your_aws_access_key
@@ -48,10 +49,14 @@ AWS_SECRET_KEY=your_aws_secret_key
 AWS_AUTHORITY=https://cognito-idp.ap-southeast-1.amazonaws.com/ap-southeast-1_XXXXXXXX
 AWS_S3_BUCKET=your-s3-bucket-name
 
-OPENAI_API_KEY=sk-your_openai_api_key
+# Gemini AI (Primary - hiện tại đang dùng)
+GEMINI_API_KEY=your_gemini_api_key
+
+# OpenAI (Backup - đã comment out)
+# OPENAI_API_KEY=sk-your_openai_api_key
 ```
 
-> 💬 Liên hệ **BE team** để lấy các giá trị AWS và OpenAI.
+> 💬 Liên hệ **BE team** để lấy các giá trị AWS và **Gemini API key**.
 
 ### 3. Build và khởi động
 
@@ -59,7 +64,7 @@ OPENAI_API_KEY=sk-your_openai_api_key
 docker compose up --build -d
 ```
 
-> Lần đầu build sẽ mất khoảng **2-5 phút** (tải .NET SDK + NuGet packages). Các lần sau sẽ nhanh hơn nhờ layer cache.
+> Lần đầu build sẽ mất khoảng **3-7 phút** (tải .NET 10 Preview SDK + NuGet packages). Các lần sau sẽ nhanh hơn nhờ layer cache.
 
 ### 4. Kiểm tra đã chạy chưa
 
@@ -135,9 +140,10 @@ docker compose up --build -d
 - http://localhost:8080/swagger
 
 ### 📋 **Lưu ý:**
-- ⚠️ **Không commit** 2 files này lên git
+- ⚠️ **Không commit** 2 files này lên git (chứa API keys)
 - ✅ **Chỉ cần đặt đúng vị trí** là Docker sẽ tự động sử dụng
-- ✅ **Không cần sửa gì** trong files này
+- ✅ **Không cần sửa gì** trong files này (đã config sẵn Gemini API)
+- 🔄 **Hệ thống hiện dùng Gemini AI** thay vì OpenAI
 
 ---
 
@@ -205,8 +211,8 @@ docker compose logs backend --tail=50
 
 ```
 RAG-System/
-├── Dockerfile            ← Build image ASP.NET Core
-├── docker-compose.yml    ← Orchestrate DB + Backend
+├── Dockerfile            ← Build image ASP.NET Core (.NET 10 Preview)
+├── docker-compose.yml    ← Orchestrate DB + Backend (updated với Gemini config)
 ├── .dockerignore         ← Loại bỏ file thừa khi build
 ├── .env.example          ← Template cấu hình (commit lên git)
 ├── .env                  ← Cấu hình thật (KHÔNG commit)

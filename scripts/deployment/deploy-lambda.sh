@@ -15,7 +15,7 @@ source "$UTILITIES_DIR/error-handling.sh"
 source "$UTILITIES_DIR/validate-aws-cli.sh"
 
 # Default configuration values
-DEFAULT_RUNTIME="dotnet8"  # Closest available to .NET 10
+DEFAULT_RUNTIME="dotnet10"  # .NET 10 runtime
 DEFAULT_MEMORY_SIZE="512"  # Cost-optimized memory allocation
 DEFAULT_TIMEOUT="30"       # Reasonable timeout for database operations
 DEFAULT_HANDLER="RAG.APIs::RAG.APIs.LambdaEntryPoint::FunctionHandlerAsync"
@@ -25,17 +25,18 @@ RUNTIME="${RUNTIME:-$DEFAULT_RUNTIME}"
 MEMORY_SIZE="${MEMORY_SIZE:-$DEFAULT_MEMORY_SIZE}"
 TIMEOUT="${TIMEOUT:-$DEFAULT_TIMEOUT}"
 HANDLER="${HANDLER:-$DEFAULT_HANDLER}"
+AWS_PROFILE="${AWS_PROFILE:-}"
 
 # Resource naming
 ENVIRONMENT="${ENVIRONMENT:-dev}"
-PROJECT_NAME="${PROJECT_NAME:-myapp}"
+PROJECT_NAME="${PROJECT_NAME:-myragapp}"
 LAMBDA_FUNCTION_NAME="$PROJECT_NAME-$ENVIRONMENT-api"
 
 # Paths
-BACKEND_PATH="${BACKEND_PATH:-code/TestDeployLambda/BE}"
+BACKEND_PATH="${BACKEND_PATH:-$(pwd)}"
 PROJECT_PATH="${PROJECT_PATH:-$BACKEND_PATH/RAG.APIs}"
 BUILD_OUTPUT_PATH="/tmp/lambda-build"
-DEPLOYMENT_PACKAGE_PATH="/tmp/lambda-deployment.zip"
+DEPLOYMENT_PACKAGE_PATH="./lambda-deployment.zip"
 
 # Global variables
 LAMBDA_FUNCTION_ARN=""
@@ -309,12 +310,23 @@ create_deployment_package() {
     # Remove existing deployment package
     rm -f "$DEPLOYMENT_PACKAGE_PATH"
     
-    # Create zip package from build output
+    # Create zip package from build output using PowerShell (Windows compatible)
     cd "$BUILD_OUTPUT_PATH"
-    execute_with_error_handling \
-        "zip -r $DEPLOYMENT_PACKAGE_PATH . -x '*.pdb' '*.xml'" \
-        "Failed to create deployment package" \
-        $ERROR_CODE_CONFIGURATION
+    
+    # Use PowerShell Compress-Archive for Windows compatibility
+    if command -v powershell >/dev/null 2>&1; then
+        execute_with_error_handling \
+            "powershell -Command \"Compress-Archive -Path '*' -DestinationPath '$DEPLOYMENT_PACKAGE_PATH' -Force\"" \
+            "Failed to create deployment package with PowerShell" \
+            $ERROR_CODE_CONFIGURATION
+    elif command -v zip >/dev/null 2>&1; then
+        execute_with_error_handling \
+            "zip -r $DEPLOYMENT_PACKAGE_PATH . -x '*.pdb' '*.xml'" \
+            "Failed to create deployment package with zip" \
+            $ERROR_CODE_CONFIGURATION
+    else
+        handle_error $ERROR_CODE_CONFIGURATION "Neither PowerShell nor zip command available for creating deployment package" true
+    fi
     
     # Check package size
     local package_size=$(stat -f%z "$DEPLOYMENT_PACKAGE_PATH" 2>/dev/null || stat -c%s "$DEPLOYMENT_PACKAGE_PATH" 2>/dev/null || echo "0")

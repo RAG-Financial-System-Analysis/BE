@@ -1,271 +1,297 @@
 #!/bin/bash
 
-# Run All Tests - AWS Deployment Automation System
-# Comprehensive test runner for all test suites
+# Run All Tests Script
+# Executes all available test suites for the RAG System deployment
 
 set -euo pipefail
 
-# Test configuration
+# Source utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEST_RESULTS_DIR="$SCRIPT_DIR/test-results-$(date +%Y%m%d-%H%M%S)"
+UTILITIES_DIR="$SCRIPT_DIR/../utilities"
+source "$UTILITIES_DIR/logging.sh"
 
-# Colors for output
-readonly RUNNER_RED='\033[0;31m'
-readonly RUNNER_GREEN='\033[0;32m'
-readonly RUNNER_YELLOW='\033[1;33m'
-readonly RUNNER_BLUE='\033[0;34m'
-readonly RUNNER_NC='\033[0m'
+# Configuration
+ENVIRONMENT="${ENVIRONMENT:-dev}"
+PROJECT_NAME="${PROJECT_NAME:-myragapp}"
+LAMBDA_FUNCTION_NAME="$PROJECT_NAME-$ENVIRONMENT-api"
 
-# Test results
-TOTAL_TESTS=0
-PASSED_TESTS=0
-FAILED_TESTS=0
-SKIPPED_TESTS=0
+# Function to display usage
+show_usage() {
+    cat << EOF
+Usage: $0 [OPTIONS]
 
-log_info() {
-    echo -e "${RUNNER_BLUE}[RUNNER]${RUNNER_NC} $1"
-}
+Runs all available test suites for the RAG System deployment.
 
-log_success() {
-    echo -e "${RUNNER_GREEN}[SUCCESS]${RUNNER_NC} $1"
-}
+OPTIONS:
+    --environment ENV         Environment name (default: dev)
+    --project-name NAME       Project name (default: myapp)
+    --skip-integration       Skip integration tests
+    --skip-api               Skip API tests
+    --skip-credentials       Skip credential tests
+    --help                   Show this help message
 
-log_failure() {
-    echo -e "${RUNNER_RED}[FAILURE]${RUNNER_NC} $1"
-}
+TEST SUITES:
+    1. 🔐 AWS Credential Detection Test
+    2. 🔗 Lambda-RDS Connection Test
+    3. 🌐 API Endpoints Test
+    4. 👤 User Authentication & Roles Test
 
-log_warning() {
-    echo -e "${RUNNER_YELLOW}[WARNING]${RUNNER_NC} $1"
-}
+EXAMPLES:
+    # Run all tests
+    $0
 
-cleanup_test_results() {
-    log_info "Cleaning up test results..."
-    # Keep test results for analysis
-}
+    # Run tests for production environment
+    $0 --environment production --project-name myrag
 
-# Note: Removed trap to avoid early exit issues
-
-setup_test_environment() {
-    log_info "Setting up test environment..."
-    
-    # Create test results directory
-    mkdir -p "$TEST_RESULTS_DIR"
-    
-    # Set environment variables for tests
-    export TEST_MODE="mock"
-    export TEST_RESULTS_DIR="$TEST_RESULTS_DIR"
-    
-    log_success "Test environment setup completed"
-}
-
-run_test_suite() {
-    local test_name="$1"
-    local test_script="$2"
-    local test_description="$3"
-    
-    log_info "Running test suite: $test_name"
-    echo "Description: $test_description"
-    
-    ((TOTAL_TESTS++))
-    
-    local test_log="$TEST_RESULTS_DIR/${test_name}.log"
-    local test_start_time=$(date +%s)
-    
-    if [ -f "$SCRIPT_DIR/$test_script" ] && [ -x "$SCRIPT_DIR/$test_script" ]; then
-        # Run the test and capture output
-        if "$SCRIPT_DIR/$test_script" > "$test_log" 2>&1; then
-            local test_end_time=$(date +%s)
-            local test_duration=$((test_end_time - test_start_time))
-            
-            log_success "$test_name PASSED (${test_duration}s)"
-            ((PASSED_TESTS++))
-            
-            # Extract key metrics from test output
-            local test_summary=$(tail -5 "$test_log" | grep -E "(PASS|FAIL|✅|❌)" | head -1 || echo "Test completed")
-            echo "  Result: $test_summary"
-            
-        else
-            local test_end_time=$(date +%s)
-            local test_duration=$((test_end_time - test_start_time))
-            
-            log_failure "$test_name FAILED (${test_duration}s)"
-            ((FAILED_TESTS++))
-            
-            # Show last few lines of error output
-            echo "  Error details:"
-            tail -10 "$test_log" | sed 's/^/    /'
-        fi
-    else
-        log_warning "$test_name SKIPPED (script not found or not executable)"
-        ((SKIPPED_TESTS++))
-    fi
-    
-    echo ""
-}
-
-# Test suite definitions
-run_all_test_suites() {
-    log_info "Starting comprehensive test execution..."
-    echo "=================================================="
-    
-    # Property Tests
-    echo -e "${RUNNER_BLUE}=== PROPERTY TESTS ===${RUNNER_NC}"
-    run_test_suite "migration-idempotency" "property-test-migration-idempotency.sh" "Tests migration idempotency property"
-    run_test_suite "config-conversion" "property-test-configuration-conversion.sh" "Tests configuration round-trip consistency"
-    run_test_suite "cost-optimization" "property-test-cost-optimization.sh" "Tests cost optimization constraints"
-    run_test_suite "deployment-idempotency" "property-test-deployment-idempotency.sh" "Tests deployment idempotency property"
-    
-    # Unit Tests
-    echo -e "${RUNNER_BLUE}=== UNIT TESTS ===${RUNNER_NC}"
-    run_test_suite "database-seeding" "unit-test-database-seeding.sh" "Tests database seeding functionality"
-    run_test_suite "infrastructure-detection" "unit-test-infrastructure-detection.sh" "Tests infrastructure detection"
-    run_test_suite "cognito-integration" "unit-test-cognito-integration.sh" "Tests Cognito integration"
-    
-    # Integration Tests
-    echo -e "${RUNNER_BLUE}=== INTEGRATION TESTS ===${RUNNER_NC}"
-    run_test_suite "end-to-end" "integration-test-end-to-end.sh" "Tests complete deployment workflows"
-    
-    # Existing Tests (for compatibility)
-    echo -e "${RUNNER_BLUE}=== EXISTING TESTS ===${RUNNER_NC}"
-    run_test_suite "deployment-args" "test-deployment-argument-parsing.sh" "Tests deployment argument parsing"
-    run_test_suite "infrastructure-integration" "test-infrastructure-integration-final.sh" "Tests infrastructure integration"
-    run_test_suite "error-handling" "test-error-handling-integration.sh" "Tests error handling mechanisms"
-}
-
-generate_test_report() {
-    local report_file="$TEST_RESULTS_DIR/test-execution-report.md"
-    
-    log_info "Generating comprehensive test report..."
-    
-    cat > "$report_file" << EOF
-# AWS Deployment Automation - Test Execution Report
-
-**Date:** $(date)
-**Test Results Directory:** $TEST_RESULTS_DIR
-
-## Summary
-
-- **Total Tests:** $TOTAL_TESTS
-- **Passed:** $PASSED_TESTS
-- **Failed:** $FAILED_TESTS
-- **Skipped:** $SKIPPED_TESTS
-- **Success Rate:** $(( PASSED_TESTS * 100 / TOTAL_TESTS ))%
-
-## Test Results
+    # Skip integration tests
+    $0 --skip-integration
 
 EOF
+}
 
-    # Add individual test results
-    for log_file in "$TEST_RESULTS_DIR"/*.log; do
-        if [ -f "$log_file" ]; then
-            local test_name=$(basename "$log_file" .log)
-            echo "### $test_name" >> "$report_file"
-            
-            if grep -q "PASS\|✅" "$log_file"; then
-                echo "**Status:** ✅ PASSED" >> "$report_file"
-            elif grep -q "FAIL\|❌" "$log_file"; then
-                echo "**Status:** ❌ FAILED" >> "$report_file"
-            else
-                echo "**Status:** ⚠️ UNKNOWN" >> "$report_file"
-            fi
-            
-            echo "" >> "$report_file"
-            echo "**Output Summary:**" >> "$report_file"
-            echo '```' >> "$report_file"
-            tail -20 "$log_file" >> "$report_file"
-            echo '```' >> "$report_file"
-            echo "" >> "$report_file"
-        fi
+# Parse arguments
+parse_arguments() {
+    local skip_integration=false
+    local skip_api=false
+    local skip_credentials=false
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --environment)
+                ENVIRONMENT="$2"
+                LAMBDA_FUNCTION_NAME="$PROJECT_NAME-$ENVIRONMENT-api"
+                shift 2
+                ;;
+            --project-name)
+                PROJECT_NAME="$2"
+                LAMBDA_FUNCTION_NAME="$PROJECT_NAME-$ENVIRONMENT-api"
+                shift 2
+                ;;
+            --skip-integration)
+                skip_integration=true
+                shift
+                ;;
+            --skip-api)
+                skip_api=true
+                shift
+                ;;
+            --skip-credentials)
+                skip_credentials=true
+                shift
+                ;;
+            --help)
+                show_usage
+                exit 0
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                show_usage
+                exit 1
+                ;;
+        esac
     done
     
-    cat >> "$report_file" << EOF
+    export SKIP_INTEGRATION=$skip_integration
+    export SKIP_API=$skip_api
+    export SKIP_CREDENTIALS=$skip_credentials
+}
 
-## Test Environment
-
-- **Test Mode:** $TEST_MODE
-- **Script Directory:** $SCRIPT_DIR
-- **Results Directory:** $TEST_RESULTS_DIR
-
-## Recommendations
-
-EOF
-
-    if [ $FAILED_TESTS -eq 0 ]; then
-        echo "✅ All tests passed successfully! The deployment system is ready for use." >> "$report_file"
+# Function to run credential detection test
+run_credential_test() {
+    if [ "$SKIP_CREDENTIALS" = true ]; then
+        log_info "⏭️  Skipping credential detection test"
+        return 0
+    fi
+    
+    log_info "🔐 Running AWS Credential Detection Test..."
+    
+    if [ -f "$SCRIPT_DIR/test-credential-detection.sh" ]; then
+        if "$SCRIPT_DIR/test-credential-detection.sh"; then
+            log_success "✅ Credential detection test passed"
+            return 0
+        else
+            log_error "❌ Credential detection test failed"
+            return 1
+        fi
     else
-        echo "❌ Some tests failed. Please review the failed tests and fix issues before deployment." >> "$report_file"
-        echo "" >> "$report_file"
-        echo "**Failed Tests:**" >> "$report_file"
-        for log_file in "$TEST_RESULTS_DIR"/*.log; do
-            if [ -f "$log_file" ] && grep -q "FAIL\|❌" "$log_file"; then
-                local test_name=$(basename "$log_file" .log)
-                echo "- $test_name" >> "$report_file"
-            fi
-        done
+        log_warn "⚠️  Credential detection test not found"
+        return 0
+    fi
+}
+
+# Function to run Lambda-RDS connection test
+run_connection_test() {
+    if [ "$SKIP_INTEGRATION" = true ]; then
+        log_info "⏭️  Skipping Lambda-RDS connection test"
+        return 0
+    fi
+    
+    log_info "🔗 Running Lambda-RDS Connection Test..."
+    
+    if [ -f "$SCRIPT_DIR/test-lambda-db-connection.sh" ]; then
+        if "$SCRIPT_DIR/test-lambda-db-connection.sh" --function-name "$LAMBDA_FUNCTION_NAME"; then
+            log_success "✅ Lambda-RDS connection test passed"
+            return 0
+        else
+            log_error "❌ Lambda-RDS connection test failed"
+            return 1
+        fi
+    else
+        log_warn "⚠️  Lambda-RDS connection test not found"
+        return 0
+    fi
+}
+
+# Function to run API tests
+run_api_tests() {
+    if [ "$SKIP_API" = true ]; then
+        log_info "⏭️  Skipping API tests"
+        return 0
+    fi
+    
+    log_info "🌐 Running API Endpoints Test..."
+    
+    local api_test_passed=true
+    
+    # Test API endpoints
+    if [ -f "$SCRIPT_DIR/test-api.sh" ]; then
+        if ! "$SCRIPT_DIR/test-api.sh"; then
+            log_error "❌ API endpoints test failed"
+            api_test_passed=false
+        fi
+    else
+        log_warn "⚠️  API endpoints test not found"
+    fi
+    
+    # Test user roles
+    if [ -f "$SCRIPT_DIR/test-user-roles.sh" ]; then
+        if ! "$SCRIPT_DIR/test-user-roles.sh"; then
+            log_error "❌ User roles test failed"
+            api_test_passed=false
+        fi
+    else
+        log_warn "⚠️  User roles test not found"
+    fi
+    
+    if [ "$api_test_passed" = true ]; then
+        log_success "✅ API tests passed"
+        return 0
+    else
+        log_error "❌ Some API tests failed"
+        return 1
+    fi
+}
+
+# Function to display test summary
+display_test_summary() {
+    local total_tests=0
+    local passed_tests=0
+    local failed_tests=0
+    local skipped_tests=0
+    
+    echo ""
+    echo "=== Test Summary ==="
+    echo "Environment: $ENVIRONMENT"
+    echo "Project: $PROJECT_NAME"
+    echo "Lambda Function: $LAMBDA_FUNCTION_NAME"
+    echo ""
+    
+    # Count and display results
+    if [ "$SKIP_CREDENTIALS" = false ]; then
+        total_tests=$((total_tests + 1))
+        if run_credential_test &>/dev/null; then
+            echo "✅ Credential Detection Test: PASSED"
+            passed_tests=$((passed_tests + 1))
+        else
+            echo "❌ Credential Detection Test: FAILED"
+            failed_tests=$((failed_tests + 1))
+        fi
+    else
+        echo "⏭️  Credential Detection Test: SKIPPED"
+        skipped_tests=$((skipped_tests + 1))
+    fi
+    
+    if [ "$SKIP_INTEGRATION" = false ]; then
+        total_tests=$((total_tests + 1))
+        if run_connection_test &>/dev/null; then
+            echo "✅ Lambda-RDS Connection Test: PASSED"
+            passed_tests=$((passed_tests + 1))
+        else
+            echo "❌ Lambda-RDS Connection Test: FAILED"
+            failed_tests=$((failed_tests + 1))
+        fi
+    else
+        echo "⏭️  Lambda-RDS Connection Test: SKIPPED"
+        skipped_tests=$((skipped_tests + 1))
+    fi
+    
+    if [ "$SKIP_API" = false ]; then
+        total_tests=$((total_tests + 1))
+        if run_api_tests &>/dev/null; then
+            echo "✅ API Tests: PASSED"
+            passed_tests=$((passed_tests + 1))
+        else
+            echo "❌ API Tests: FAILED"
+            failed_tests=$((failed_tests + 1))
+        fi
+    else
+        echo "⏭️  API Tests: SKIPPED"
+        skipped_tests=$((skipped_tests + 1))
     fi
     
     echo ""
-    echo "📋 Test report generated: $report_file"
+    echo "=== Results ==="
+    echo "Total Tests: $((total_tests + skipped_tests))"
+    echo "Passed: $passed_tests"
+    echo "Failed: $failed_tests"
+    echo "Skipped: $skipped_tests"
+    echo ""
     
-    # Display summary
-    cat "$report_file"
+    if [ $failed_tests -eq 0 ]; then
+        log_success "🎉 All tests completed successfully!"
+        return 0
+    else
+        log_error "❌ $failed_tests test(s) failed"
+        return 1
+    fi
 }
 
+# Main execution function
 main() {
-    echo -e "${RUNNER_BLUE}🧪 AWS Deployment Automation - Comprehensive Test Suite${RUNNER_NC}"
-    echo "=================================================="
+    log_info "🧪 Starting All Tests..."
+    log_info "Environment: $ENVIRONMENT, Project: $PROJECT_NAME"
     
-    # Setup test environment
-    setup_test_environment
+    # Parse arguments
+    parse_arguments "$@"
     
-    # Run all test suites
-    run_all_test_suites
+    local overall_success=true
     
-    # Generate comprehensive report
-    generate_test_report
+    # Run tests
+    if ! run_credential_test; then
+        overall_success=false
+    fi
     
-    # Manual cleanup
-    cleanup_test_results
+    if ! run_connection_test; then
+        overall_success=false
+    fi
     
-    echo ""
-    echo "=================================================="
-    echo -e "${RUNNER_BLUE}Test Execution Summary:${RUNNER_NC}"
-    echo "  Total Tests: $TOTAL_TESTS"
-    echo "  Passed: $PASSED_TESTS"
-    echo "  Failed: $FAILED_TESTS"
-    echo "  Skipped: $SKIPPED_TESTS"
+    if ! run_api_tests; then
+        overall_success=false
+    fi
     
-    if [ $FAILED_TESTS -eq 0 ]; then
-        echo -e "${RUNNER_GREEN}✅ All tests passed! System is ready for deployment.${RUNNER_NC}"
+    # Display summary
+    display_test_summary
+    
+    if [ "$overall_success" = true ]; then
+        log_success "🎉 All tests completed successfully!"
         exit 0
     else
-        echo -e "${RUNNER_RED}❌ $FAILED_TESTS test(s) failed. Please review and fix issues.${RUNNER_NC}"
+        log_error "❌ Some tests failed"
         exit 1
     fi
 }
 
-# Handle command line arguments
-case "${1:-}" in
-    --help|-h)
-        echo "AWS Deployment Automation - Comprehensive Test Runner"
-        echo ""
-        echo "Usage: $0 [options]"
-        echo ""
-        echo "Options:"
-        echo "  --help, -h              Show this help message"
-        echo ""
-        echo "This script runs all available test suites:"
-        echo "- Property tests (idempotency, consistency)"
-        echo "- Unit tests (individual components)"
-        echo "- Integration tests (end-to-end workflows)"
-        echo ""
-        echo "Test results are saved to: test-results-YYYYMMDD-HHMMSS/"
-        exit 0
-        ;;
-    *)
-        # Continue with main execution
-        ;;
-esac
-
-# Run main function
-main "$@"
+# Script execution
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

@@ -1,626 +1,317 @@
-# Scripts Tự Động Hóa Triển Khai AWS
+# RAG System Deployment Scripts
 
-Thư mục này chứa tất cả các scripts để tự động hóa việc provisioning AWS infrastructure và triển khai ứng dụng .NET 10.
+This directory contains all deployment and management scripts for the RAG System AWS deployment.
 
-## 🚀 Hướng Dẫn Sử Dụng Nhanh
-
-### 📁 Vị Trí Đặt Folder Scripts
-Đặt folder `scripts` này trong thư mục gốc của dự án .NET của bạn:
-```
-your-project/
-├── src/                    # Code .NET của bạn
-├── scripts/               # Folder scripts này
-│   ├── deploy.sh
-│   ├── infrastructure/
-│   ├── deployment/
-│   └── ...
-├── appsettings.json       # File cấu hình .NET
-└── your-project.sln
-```
-
-### 🔧 Thiết Lập Ban Đầu (Chỉ làm 1 lần)
-
-1. **Cài đặt AWS CLI:**
-   ```bash
-   # Windows (PowerShell)
-   winget install Amazon.AWSCLI
-   
-   # macOS
-   brew install awscli
-   
-   # Linux
-   curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-   unzip awscliv2.zip
-   sudo ./aws/install
-   ```
-
-2. **Cấu hình AWS credentials:**
-   ```bash
-   aws configure
-   # Nhập: Access Key ID, Secret Access Key, Region (vd: ap-southeast-1), Output format (json)
-   ```
-
-3. **Kiểm tra thiết lập:**
-   ```bash
-   cd your-project
-   chmod +x scripts/utilities/validate-aws-cli.sh
-   ./scripts/utilities/validate-aws-cli.sh
-   ```
-
-### 🎯 Triển Khai Lần Đầu (Initial Deployment)
-
-```bash
-cd your-project
-
-# Bước 1: Tạo infrastructure AWS (RDS, Lambda, VPC, IAM)
-./scripts/deploy.sh --mode initial --environment production --project-name myapp
-
-# Hoặc với environment khác
-./scripts/deploy.sh --mode initial --environment staging --project-name myapp-staging
-```
-
-**Quá trình này sẽ:**
-- Tạo VPC và subnets
-- Tạo RDS PostgreSQL database
-- Tạo Lambda function
-- Thiết lập IAM roles và permissions
-- Deploy code .NET lên Lambda
-- Chạy database migrations
-- Cấu hình environment variables
-
-### 🔄 Cập Nhật Code (Update Deployment)
-
-Khi bạn có code mới cần deploy:
-
-```bash
-cd your-project
-
-# Chỉ deploy code mới, không thay đổi infrastructure
-./scripts/deploy.sh --mode update --environment production --project-name myapp
-```
-
-**Quá trình này sẽ:**
-- Build và package code .NET mới
-- Upload lên Lambda function hiện có
-- Chạy database migrations mới (nếu có)
-- Cập nhật environment variables (nếu cần)
-
-### 📊 Xem Logs và Monitoring
-
-1. **Xem logs deployment:**
-   ```bash
-   # Logs chính
-   cat deployment.log
-   
-   # Logs lỗi
-   cat deployment_errors.log
-   
-   # Logs theo thời gian thực
-   tail -f deployment.log
-   ```
-
-2. **Xem logs Lambda trên AWS:**
-   ```bash
-   # Xem logs Lambda function
-   aws logs describe-log-groups --log-group-name-prefix "/aws/lambda/myapp"
-   
-   # Xem logs chi tiết
-   aws logs tail /aws/lambda/myapp-production --follow
-   ```
-
-3. **Kiểm tra trạng thái infrastructure:**
-   ```bash
-   ./scripts/utilities/check-infrastructure.sh --environment production --project-name myapp
-   ```
-
-### 🛠️ Bảo Trì và Troubleshooting
-
-1. **Kiểm tra trạng thái hệ thống:**
-   ```bash
-   # Kiểm tra tất cả resources
-   ./scripts/utilities/check-infrastructure.sh --environment production
-   
-   # Kiểm tra chỉ RDS
-   aws rds describe-db-instances --query "DBInstances[?contains(DBInstanceIdentifier, 'myapp')]"
-   
-   # Kiểm tra chỉ Lambda
-   aws lambda list-functions --query "Functions[?contains(FunctionName, 'myapp')]"
-   ```
-
-2. **Rollback khi có lỗi:**
-   ```bash
-   # Rollback tự động
-   ./scripts/deploy.sh --mode rollback --environment production --project-name myapp
-   
-   # Rollback chỉ Lambda code
-   ./scripts/utilities/rollback-deployment.sh --scope lambda --environment production
-   ```
-
-3. **Dọn dẹp resources (cẩn thận!):**
-   ```bash
-   # Xem trước sẽ xóa gì
-   ./scripts/infrastructure/cleanup-infrastructure.sh --dry-run --environment staging
-   
-   # Xóa thật (không thể hoàn tác!)
-   ./scripts/infrastructure/cleanup-infrastructure.sh --environment staging --force
-   ```
-
-### 🔍 Các Lệnh Hữu Ích Khác
-
-1. **Dry run (xem trước không thực hiện):**
-   ```bash
-   ./scripts/deploy.sh --mode initial --environment staging --dry-run
-   ```
-
-2. **Liệt kê checkpoints:**
-   ```bash
-   ./scripts/deploy.sh --list-checkpoints
-   ```
-
-3. **Resume từ checkpoint:**
-   ```bash
-   ./scripts/deploy.sh --mode resume --environment production --checkpoint rds_provisioned
-   ```
-
-4. **Chạy chỉ migrations:**
-   ```bash
-   ./scripts/migration/run-migrations.sh --connection-string "your-connection-string"
-   ```
-
-### ⚠️ Lưu Ý Quan Trọng
-
-- **Environment names:** Sử dụng `development`, `staging`, hoặc `production`
-- **Project names:** Chỉ dùng chữ cái, số và dấu gạch ngang
-- **Backup:** Luôn backup database trước khi deploy production
-- **Testing:** Test trên staging trước khi deploy production
-- **Costs:** Monitor AWS costs, đặc biệt RDS và Lambda usage
-
-## 📋 Scenarios Thường Gặp
-
-### Scenario 1: Lần đầu setup dự án mới
-```bash
-# 1. Clone/tạo dự án .NET
-git clone your-repo
-cd your-project
-
-# 2. Copy folder scripts vào dự án
-# (Đặt scripts/ ở cùng level với src/)
-
-# 3. Thiết lập AWS
-aws configure
-
-# 4. Validate setup
-./scripts/utilities/validate-aws-cli.sh
-
-# 5. Deploy lần đầu
-./scripts/deploy.sh --mode initial --environment staging --project-name myapp-staging
-```
-
-### Scenario 2: Developer deploy code mới hàng ngày
-```bash
-# 1. Pull code mới
-git pull origin main
-
-# 2. Build và test local (optional)
-dotnet build
-dotnet test
-
-# 3. Deploy lên staging
-./scripts/deploy.sh --mode update --environment staging --project-name myapp-staging
-
-# 4. Test trên staging
-# ... test your app ...
-
-# 5. Deploy lên production (nếu OK)
-./scripts/deploy.sh --mode update --environment production --project-name myapp
-```
-
-### Scenario 3: Có lỗi cần rollback
-```bash
-# 1. Phát hiện lỗi sau deploy
-# 2. Rollback ngay lập tức
-./scripts/deploy.sh --mode rollback --environment production --project-name myapp
-
-# 3. Kiểm tra logs để tìm nguyên nhân
-cat deployment_errors.log
-aws logs tail /aws/lambda/myapp-production --since 1h
-
-# 4. Fix code và deploy lại
-git commit -m "fix: issue xyz"
-./scripts/deploy.sh --mode update --environment production --project-name myapp
-```
-
-### Scenario 4: Database migration mới
-```bash
-# 1. Tạo migration mới trong .NET project
-dotnet ef migrations add NewFeature
-
-# 2. Deploy (sẽ tự động chạy migrations)
-./scripts/deploy.sh --mode update --environment staging --project-name myapp-staging
-
-# 3. Nếu migration fail, rollback
-./scripts/migration/rollback-migrations.sh --target-migration PreviousMigration
-```
-
-### Scenario 5: Monitoring và maintenance
-```bash
-# Hàng ngày - kiểm tra health
-./scripts/utilities/check-infrastructure.sh --environment production
-
-# Hàng tuần - xem logs
-aws logs tail /aws/lambda/myapp-production --since 7d > weekly-logs.txt
-
-# Hàng tháng - kiểm tra costs
-aws ce get-cost-and-usage --time-period Start=2024-01-01,End=2024-01-31 --granularity MONTHLY --metrics BlendedCost
-```
-
-### Scenario 6: Cleanup environment cũ
-```bash
-# 1. Backup data quan trọng trước
-aws rds create-db-snapshot --db-instance-identifier myapp-old --db-snapshot-identifier myapp-old-backup
-
-# 2. Xem trước sẽ xóa gì
-./scripts/infrastructure/cleanup-infrastructure.sh --dry-run --environment old-env
-
-# 3. Xóa (cẩn thận!)
-./scripts/infrastructure/cleanup-infrastructure.sh --environment old-env --force
-```
-
-## 🔧 Troubleshooting Thường Gặp
-
-### Lỗi: "AWS CLI not configured"
-```bash
-# Giải pháp:
-aws configure
-# Nhập access key, secret key, region
-```
-
-### Lỗi: "Permission denied"
-```bash
-# Giải pháp:
-chmod +x scripts/deploy.sh
-chmod +x scripts/**/*.sh
-```
-
-### Lỗi: "RDS instance already exists"
-```bash
-# Giải pháp 1: Sử dụng mode update thay vì initial
-./scripts/deploy.sh --mode update --environment production --project-name myapp
-
-# Giải pháp 2: Cleanup và tạo lại
-./scripts/infrastructure/cleanup-infrastructure.sh --scope rds --environment production
-./scripts/deploy.sh --mode initial --environment production --project-name myapp
-```
-
-### Lỗi: "Lambda deployment package too large"
-```bash
-# Giải pháp: Optimize package size
-# 1. Kiểm tra dependencies không cần thiết
-# 2. Sử dụng trimming trong .NET
-# 3. Exclude files không cần thiết
-```
-
-### Lỗi: "Database connection failed"
-```bash
-# Giải pháp:
-# 1. Kiểm tra security groups
-aws ec2 describe-security-groups --filters "Name=group-name,Values=*myapp*"
-
-# 2. Kiểm tra RDS status
-aws rds describe-db-instances --db-instance-identifier myapp-production
-
-# 3. Test connection từ Lambda
-aws lambda invoke --function-name myapp-production --payload '{"test":"connection"}' response.json
-```
-
-## 📞 Hỗ Trợ và Liên Hệ
-
-### Khi gặp vấn đề:
-1. **Kiểm tra logs:** `cat deployment_errors.log`
-2. **Validate AWS setup:** `./scripts/utilities/validate-aws-cli.sh`
-3. **Kiểm tra infrastructure:** `./scripts/utilities/check-infrastructure.sh`
-4. **Xem AWS Console** để kiểm tra resources trực tiếp
-
-### Files logs quan trọng:
-- `deployment.log` - Logs chính của deployment
-- `deployment_errors.log` - Logs lỗi chi tiết
-- `/aws/lambda/function-name` - Logs Lambda trên CloudWatch
-
-### Useful AWS CLI commands:
-```bash
-# Xem tất cả resources của project
-aws resourcegroupstaggingapi get-resources --tag-filters Key=Project,Values=myapp
-
-# Xem costs hiện tại
-aws ce get-cost-and-usage --time-period Start=2024-01-01,End=2024-01-31 --granularity MONTHLY --metrics BlendedCost
-
-# Xem Lambda logs
-aws logs describe-log-groups --log-group-name-prefix "/aws/lambda/"
-```
-
-## Cấu Trúc Thư Mục
+## 📁 Directory Structure
 
 ```
 scripts/
-├── deploy.sh                    # Script điều phối triển khai chính với tính năng khôi phục
-├── infrastructure/              # Scripts provisioning AWS infrastructure
-│   ├── provision-rds.sh        # Provisioning RDS PostgreSQL
-│   ├── provision-lambda.sh     # Provisioning Lambda function
-│   ├── configure-iam.sh        # Thiết lập IAM roles và policies
-│   └── cleanup-infrastructure.sh # Dọn dẹp tài nguyên toàn diện
-├── deployment/                  # Scripts triển khai ứng dụng
-│   ├── deploy-lambda.sh        # Triển khai code Lambda
-│   ├── configure-environment.sh # Cấu hình environment variables
-│   └── update-lambda-environment.sh # Cập nhật Lambda environment
-├── migration/                   # Scripts migration database
-│   ├── run-migrations.sh       # Chạy Entity Framework migrations
-│   ├── seed-data.sh            # Seeding database
-│   └── rollback-migrations.sh  # Rollback migrations
-├── utilities/                   # Scripts tiện ích cốt lõi
-│   ├── logging.sh              # Tiện ích logging với timestamp và log levels
-│   ├── validate-aws-cli.sh     # Validation AWS CLI và kiểm tra credentials
-│   ├── error-handling.sh       # Framework xử lý lỗi toàn diện
-│   ├── rollback-deployment.sh  # Hệ thống rollback deployment
-│   ├── resume-deployment.sh    # Tiếp tục deployments bị gián đoạn
-│   └── check-infrastructure.sh # Validation trạng thái infrastructure
-└── README.md                   # File này
+├── deploy-full-stack.sh              # 🚀 Master deployment script (FIRST TIME)
+├── deploy-update-only.sh             # 🔄 Code update script (SUBSEQUENT DEPLOYMENTS)
+├── cleanup-deployment.sh             # 🧹 Cleanup and resource management
+├── database/                         # 🗄️ Database management
+│   ├── trigger-db-initializer.sh    #   ├── Trigger DbInitializer to seed all data
+│   ├── seed-roles-direct.sh         #   ├── [LEGACY] Direct seed roles and analytics types
+│   └── seed-default-users.sh        #   └── [LEGACY] Direct seed default admin/analyst users
+├── deployment/                       # 📦 Application deployment
+│   ├── deploy-lambda.sh             #   ├── Deploy Lambda function code
+│   └── configure-environment.sh     #   └── Configure Lambda environment variables
+├── infrastructure/                   # 🏗️ AWS infrastructure provisioning
+│   ├── provision-rds.sh             #   ├── Deploy RDS PostgreSQL database
+│   ├── provision-lambda.sh          #   ├── Provision Lambda function infrastructure
+│   └── provision-api-gateway.sh     #   └── Deploy API Gateway
+├── integration/                      # 🔗 Integration scripts
+├── migration/                        # 🔄 Database migrations
+│   └── run-migrations.sh            #   └── Run Entity Framework migrations
+├── testing/                          # 🧪 Testing and validation scripts
+│   ├── test-api.sh                  #   ├── Test API endpoints
+│   ├── test-user-roles.sh           #   ├── Test authentication and roles
+│   ├── test-lambda-db-connection.sh #   ├── Test Lambda-RDS connectivity
+│   ├── test-credential-detection.sh #   ├── Test AWS credential detection
+│   └── run-all-tests.sh             #   └── Run all test suites
+├── setup/                           # ⚙️ Setup and configuration
+│   └── setup-deployment.sh         #   └── Initial project setup
+├── temp/                            # 📁 Temporary files (JSON, build artifacts)
+└── utilities/                       # 🛠️ Shared utilities
+    ├── logging.sh                   #   ├── Logging functions
+    ├── error-handling.sh            #   ├── Error handling utilities
+    ├── validate-aws-cli.sh          #   ├── AWS CLI validation
+    └── parse-appsettings.sh         #   └── Configuration parsing
 ```
 
-## Script Triển Khai Chính
+## 🚀 Quick Start
 
-Script `deploy.sh` cung cấp điều phối triển khai toàn diện với các tính năng khôi phục nâng cao:
+### Full Deployment (Recommended for First Time)
 
-### Các Chế Độ Triển Khai
-- **initial**: Provisioning infrastructure đầy đủ và triển khai code
-- **update**: Chỉ triển khai code mà không thay đổi infrastructure
-- **cleanup**: Xóa tài nguyên hoàn toàn với xác nhận
-- **rollback**: Rollback thông minh dựa trên phân tích lỗi
-- **resume**: Tiếp tục từ checkpoint thành công cuối cùng
+Deploy everything with one command:
 
-### Tính Năng Khôi Phục
-- **Tự động tạo checkpoint** trong các bước triển khai
-- **Phân tích lỗi thông minh** với hướng dẫn khắc phục cụ thể
-- **Logging toàn diện** với context lỗi chi tiết
-- **Khả năng rollback** cho tất cả các thành phần triển khai
-- **Chức năng resume** từ bất kỳ checkpoint nào
-
-### Ví Dụ Sử Dụng
 ```bash
-# Triển khai ban đầu với tính năng khôi phục
-./scripts/deploy.sh --mode initial --environment production
-
-# Rollback deployment thất bại
-./scripts/deploy.sh --mode rollback --environment production --force
-
-# Resume từ checkpoint
-./scripts/deploy.sh --mode resume --environment production --checkpoint rds_provisioned
-
-# Liệt kê các checkpoint có sẵn
-./scripts/deploy.sh --list-checkpoints
-
-# Dry run để xem trước các hành động
-./scripts/deploy.sh --mode initial --environment staging --dry-run
+./deploy-full-stack.sh
 ```
 
-## Tiện Ích Cốt Lõi
+### Code Update Only (For Subsequent Deployments)
 
-### Tiện Ích Logging (`utilities/logging.sh`)
+Update Lambda code without touching infrastructure or database:
 
-Cung cấp logging nhất quán trên tất cả deployment scripts với:
-- Hỗ trợ timestamp
-- Các mức log (ERROR, WARN, INFO, DEBUG, SUCCESS)
-- Output console có mã màu
-- File logging để debugging
-- Cấu hình được các mức log và đường dẫn file
-
-**Cách sử dụng:**
 ```bash
-source scripts/utilities/logging.sh
-
-log_info "Bắt đầu quá trình triển khai"
-log_warn "Đây là thông báo cảnh báo"
-log_error "Đây là thông báo lỗi"
-log_success "Hoạt động hoàn thành thành công"
+./deploy-update-only.sh
 ```
 
-**Environment Variables:**
-- `LOG_LEVEL`: Đặt mức log (1=ERROR, 2=WARN, 3=INFO, 4=DEBUG)
-- `LOG_FILE`: Đặt đường dẫn file log tùy chỉnh (mặc định: ./deployment.log)
+This runs the complete deployment pipeline:
+1. 🗄️ Deploy RDS Database
+2. ⚡ Deploy Lambda Function
+3. 🔄 Run Database Migrations (from Lambda to DB)
+4. 🌱 Trigger DbInitializer (automatically seeds roles, analytics types, and users)
+5. 🌐 Deploy API Gateway
+6. 🧪 Run Tests
 
-### Validation AWS CLI (`utilities/validate-aws-cli.sh`)
+### Custom Deployment Options
 
-Validate thiết lập AWS CLI trước các hoạt động triển khai:
-- Kiểm tra cài đặt AWS CLI
-- Validate credentials và permissions
-- Xác minh cấu hình region
-
-### Framework Xử Lý Lỗi (`utilities/error-handling.sh`)
-
-Hệ thống xử lý lỗi toàn diện với:
-- Thông báo lỗi chi tiết với context và các bước khắc phục
-- Hệ thống mã lỗi để nhận dạng lỗi nhất quán
-- Logging lỗi toàn diện vào files để debugging
-- Đăng ký và thực thi hàm cleanup tự động
-- Hệ thống checkpoint để theo dõi trạng thái triển khai
-- Phân tích lỗi AWS cụ thể và hướng dẫn
-
-**Tính Năng Chính:**
-- **18 mã lỗi riêng biệt** cho các loại lỗi khác nhau
-- **Thông báo lỗi có context** với các bước khắc phục cụ thể
-- **Logging lỗi tự động** với chi tiết môi trường và hệ thống
-- **Tạo và khôi phục checkpoint** cho các hoạt động recovery
-- **Phân tích lỗi AWS** với hướng dẫn cụ thể cho các vấn đề thường gặp
-
-**Cách sử dụng:**
 ```bash
-source scripts/utilities/error-handling.sh
+# Production deployment
+./deploy-full-stack.sh --environment production --project-name myrag
 
-# Đặt context lỗi để báo cáo tốt hơn
-set_error_context "RDS provisioning"
-set_error_remediation "Kiểm tra AWS RDS limits và các instances hiện có"
+# Development without tests
+./deploy-full-stack.sh --skip-tests
 
-# Xử lý lỗi với thông tin chi tiết
-handle_error $ERROR_CODE_INFRASTRUCTURE "RDS provisioning thất bại" true
-
-# Tạo checkpoints để recovery
-create_checkpoint "rds_provisioned" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-# Đăng ký cleanup functions
-register_cleanup_function cleanup_temp_files
+# Skip database seeding (for existing databases)
+./deploy-full-stack.sh --skip-seeding
 ```
 
-## Hệ Thống Recovery và Rollback
+## 📖 Individual Script Usage
 
-### Dọn Dẹp Infrastructure (`infrastructure/cleanup-infrastructure.sh`)
+### Infrastructure Scripts
 
-Dọn dẹp tài nguyên AWS toàn diện với:
-- **Khám phá tài nguyên thông minh** trên tất cả các dịch vụ AWS
-- **Dọn dẹp có phạm vi** (all, lambda, rds, iam, vpc)
-- **Chế độ dry-run** để xem trước các xóa
-- **Chế độ force** để dọn dẹp tự động
-- **Báo cáo dọn dẹp chi tiết** với theo dõi thành công/thất bại
-
-**Cách sử dụng:**
 ```bash
-# Dọn dẹp đầy đủ với xác nhận
-./scripts/infrastructure/cleanup-infrastructure.sh --environment production
+# Deploy RDS database
+./infrastructure/provision-rds.sh --environment dev
 
-# Dry run để xem những gì sẽ bị xóa
-./scripts/infrastructure/cleanup-infrastructure.sh --dry-run --environment staging
+# Deploy Lambda infrastructure
+./infrastructure/provision-lambda.sh --environment dev
 
-# Force cleanup không có prompts
-./scripts/infrastructure/cleanup-infrastructure.sh --force --environment dev
-
-# Chỉ dọn dẹp tài nguyên cụ thể
-./scripts/infrastructure/cleanup-infrastructure.sh --scope lambda --environment production
+# Deploy API Gateway
+./infrastructure/provision-api-gateway.sh --environment dev
 ```
 
-### Rollback Deployment (`utilities/rollback-deployment.sh`)
+### Application Deployment
 
-Hệ thống rollback thông minh với:
-- **Phân tích lỗi tự động** dựa trên trạng thái deployment
-- **Rollback phiên bản Lambda** về các phiên bản hoạt động trước đó
-- **Rollback migration database** với hướng dẫn khôi phục snapshot
-- **Dọn dẹp infrastructure một phần** cho provisioning thất bại
-- **Rollback có phạm vi** để recovery có mục tiêu
-
-**Cách sử dụng:**
 ```bash
-# Rollback tự động dựa trên trạng thái deployment
-./scripts/utilities/rollback-deployment.sh --environment production
+# Deploy Lambda function code
+./deployment/deploy-lambda.sh --environment dev
 
-# Rollback các thành phần cụ thể
-./scripts/utilities/rollback-deployment.sh --scope lambda --environment staging
-
-# Rollback về checkpoint cụ thể
-./scripts/utilities/rollback-deployment.sh --checkpoint rds_provisioned --environment dev
+# Configure Lambda environment variables
+./deployment/configure-environment.sh --function-name myapp-dev-api
 ```
 
-### Resume Deployment (`utilities/resume-deployment.sh`)
+### Database Management
 
-Resume các deployments bị gián đoạn với:
-- **Phát hiện checkpoint tự động** từ bước thành công cuối cùng
-- **Validation trạng thái infrastructure** trước khi resume
-- **Xác định hành động thông minh** dựa trên checkpoint
-- **Theo dõi tiến độ** với tạo checkpoint mới
-
-**Cách sử dụng:**
 ```bash
-# Resume từ checkpoint cuối cùng
-./scripts/utilities/resume-deployment.sh --environment production --mode initial
+# Run Entity Framework migrations
+./migration/run-migrations.sh --environment dev
 
-# Resume từ checkpoint cụ thể
-./scripts/utilities/resume-deployment.sh --checkpoint lambda_provisioned --environment staging
-
-# Liệt kê các checkpoint có sẵn
-./scripts/utilities/resume-deployment.sh --list-checkpoints
+# Trigger DbInitializer to seed all data (roles, analytics types, users)
+./database/trigger-db-initializer.sh --function-name myapp-dev-api
 ```
-- Kiểm tra các permissions dịch vụ AWS cần thiết
 
-**Cách sử dụng:**
+### Testing
+
 ```bash
-source scripts/utilities/validate-aws-cli.sh
+# Test Lambda-RDS connection
+./tests/test-lambda-db-connection.sh
 
-# Validate với profile mặc định
-validate_aws_cli
+# Test API endpoints
+./tests/test-api.sh
 
-# Validate với profile cụ thể
-validate_aws_cli "my-profile"
+# Test user authentication and roles
+./tests/test-user-roles.sh
 
-# Hiển thị hướng dẫn thiết lập
-show_aws_setup_instructions
+# Test AWS credential detection
+./tests/test-credential-detection.sh
+
+# Run all tests
+./tests/run-all-tests.sh
 ```
 
-### Framework Xử Lý Lỗi (`utilities/error-handling.sh`)
+## 🧹 Cleanup
 
-Cung cấp báo cáo và xử lý lỗi nhất quán:
-- Mã lỗi chuẩn hóa
-- Thông báo lỗi có nhận thức context
-- Thực thi hàm cleanup tự động
-- Checkpoints khôi phục lỗi
-- Xử lý lỗi AWS cụ thể
+### Clean Temporary Files
 
-**Cách sử dụng:**
 ```bash
-source scripts/utilities/error-handling.sh
+# Clean temporary files only (default)
+./cleanup-deployment.sh
 
-# Đặt context lỗi để báo cáo tốt hơn
-set_error_context "RDS provisioning"
-set_error_remediation "Kiểm tra giới hạn dịch vụ AWS RDS và permissions"
+# Clean everything except AWS resources
+./cleanup-deployment.sh --all
 
-# Đăng ký cleanup functions
-register_cleanup_function "cleanup_rds_resources"
-
-# Thực thi commands với xử lý lỗi
-execute_with_error_handling "aws rds create-db-instance ..." "Thất bại tạo RDS instance"
-
-# Xử lý lỗi cụ thể
-handle_error $ERROR_CODE_INFRASTRUCTURE "Tạo RDS instance thất bại"
+# Clean specific categories
+./cleanup-deployment.sh --clean-logs --clean-temp --clean-checkpoints
 ```
 
-## Yêu Cầu Tiên Quyết
+### Destroy AWS Resources
 
-Trước khi sử dụng các scripts này, đảm bảo bạn có:
+**⚠️ WARNING**: This permanently deletes all AWS resources!
 
-1. **AWS CLI v2** được cài đặt và cấu hình
-2. **AWS credentials hợp lệ** với các permissions cần thiết
-3. **Bash shell** (người dùng Windows có thể sử dụng Git Bash hoặc WSL)
-4. **IAM permissions phù hợp** cho:
-   - Amazon RDS (tạo, sửa đổi, xóa instances)
-   - AWS Lambda (tạo, cập nhật, invoke functions)
-   - Amazon EC2/VPC (tạo, sửa đổi tài nguyên mạng)
-   - IAM (tạo, sửa đổi roles và policies)
+```bash
+./cleanup-deployment.sh --destroy-aws --environment dev
+```
 
-## Bắt Đầu
+## ⚙️ Configuration
 
-1. Validate thiết lập AWS CLI của bạn:
+### Environment Variables
+
+Scripts use these environment variables:
+
+```bash
+ENVIRONMENT=dev                    # Deployment environment
+PROJECT_NAME=myapp                # Project identifier
+SKIP_TESTS=false                  # Skip tests during deployment
+SKIP_SEEDING=false               # Skip database seeding
+```
+
+### AWS Configuration
+
+Ensure AWS CLI is configured:
+
+```bash
+aws configure
+# or
+export AWS_ACCESS_KEY_ID=your-key
+export AWS_SECRET_ACCESS_KEY=your-secret
+export AWS_DEFAULT_REGION=ap-southeast-1
+```
+
+**Note**: All other configuration is automatically read from `RAG.APIs/appsettings.json`. No additional configuration files are needed.
+
+## 🔍 Deployment Order
+
+**IMPORTANT**: Scripts must be run in this specific order for first-time deployment:
+
+1. **Infrastructure**: `provision-rds.sh` → `provision-lambda.sh`
+2. **Application**: `deploy-lambda.sh`
+3. **Database**: `run-migrations.sh` (from Lambda to DB)
+4. **Seeding**: `trigger-db-initializer.sh` (DbInitializer seeds roles, analytics types, users automatically)
+5. **Gateway**: `provision-api-gateway.sh`
+6. **Testing**: `test-*` scripts
+
+The `deploy-full-stack.sh` script handles this order automatically and is the recommended deployment method.
+
+## 📁 File Management
+
+### Temporary Files
+
+Scripts create temporary files in:
+- `temp/` directory (auto-created)
+- Root-level JSON files (auto-cleaned)
+
+### Logs
+
+Deployment logs are stored in:
+- `../logs/` - Deployment logs
+- `../deployment_logs/` - Detailed deployment logs
+- `../deployment_checkpoints/` - State tracking files
+
+### Cleanup
+
+Use `cleanup-deployment.sh` to manage temporary files and logs.
+
+## 🛠️ Utilities
+
+### Shared Functions
+
+All scripts use shared utilities from `utilities/`:
+
+- **logging.sh**: Colored logging functions (`log_info`, `log_success`, `log_error`)
+- **error-handling.sh**: Error handling and cleanup functions
+- **validate-aws-cli.sh**: AWS CLI validation and setup
+- **parse-appsettings.sh**: Configuration file parsing
+
+### Error Handling
+
+All scripts include:
+- Automatic error detection (`set -euo pipefail`)
+- Cleanup on exit
+- Detailed error messages with remediation steps
+- Rollback capabilities where applicable
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+1. **Permission Denied**: Ensure scripts are executable
    ```bash
-   ./scripts/utilities/validate-aws-cli.sh
+   chmod +x scripts/*.sh scripts/*/*.sh
    ```
 
-2. Kiểm tra output validation và giải quyết mọi vấn đề trước khi tiến hành triển khai.
+2. **AWS Credentials**: The scripts support flexible credential detection
+   
+   **Automatic Detection**: Scripts automatically detect credentials from:
+   - AWS CLI configuration (`aws configure`)
+   - Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+   - AWS profiles (`AWS_PROFILE`)
+   - IAM roles (EC2/Lambda instance profiles)
+   - AWS credentials files (`~/.aws/credentials`, `~/.aws/config`)
+   
+   **Verification**: Test any credential method with:
+   ```bash
+   aws sts get-caller-identity
+   ```
+   
+   **No Configuration Required**: If you already have AWS credentials set up via any method, you don't need to run `aws configure`.
 
-## Xử Lý Lỗi
+3. **Dependencies**: Check prerequisites
+   ```bash
+   # Required: AWS CLI, .NET SDK, PostgreSQL client
+   aws --version
+   dotnet --version
+   psql --version
+   ```
 
-Tất cả scripts sử dụng framework xử lý lỗi tập trung cung cấp:
-- Thông báo lỗi chi tiết với context
-- Cleanup tự động khi thất bại
-- Logging lỗi để debugging
-- Recovery checkpoints cho deployments một phần
+### Debug Mode
 
-Error logs được lưu vào `deployment_errors.log` để troubleshooting.
+Enable verbose logging:
+```bash
+export DEBUG=true
+./deploy-full-stack.sh
+```
 
-## Logging
+### Log Files
 
-Tất cả hoạt động script được log vào `deployment.log` theo mặc định. Bạn có thể:
-- Thay đổi mức log: `export LOG_LEVEL=4` (cho mức DEBUG)
-- Thay đổi file log: `export LOG_FILE="/path/to/custom.log"`
-- Xóa logs: Sử dụng hàm `clear_log` từ logging.sh
+Check deployment logs:
+```bash
+ls -la ../logs/
+tail -f ../logs/deployment_*.log
+```
 
-## Hỗ Trợ
+## 📋 Prerequisites
 
-Đối với các vấn đề hoặc câu hỏi:
-1. Kiểm tra error logs trong `deployment_errors.log`
-2. Review cấu hình AWS CLI với `aws configure list`
-3. Xác minh AWS permissions với validation script
-4. Tham khảo phần troubleshooting trong tài liệu dự án chính
+Before running any scripts:
+
+- ✅ AWS CLI v2.0+ installed and configured
+- ✅ .NET SDK 8.0+ installed
+- ✅ PostgreSQL client (psql) installed
+- ✅ Bash shell available
+- ✅ AWS permissions for RDS, Lambda, API Gateway, IAM
+
+## 🎯 Default Outputs
+
+After successful deployment:
+
+- **RDS Database**: `{project}-{env}-db` (e.g., `myapp-dev-db`)
+- **Lambda Function**: `{project}-{env}-api` (e.g., `myapp-dev-api`)
+- **API Gateway**: REST API with Swagger documentation
+- **Default Users**:
+  - Admin: `admin@rag.com` / `Admin@123!!`
+  - Analyst: `analyst@rag.com` / `Analyst@123!!`
+
+## 📞 Support
+
+For issues:
+1. Check script logs in `../logs/`
+2. Verify AWS resource status in AWS Console
+3. Run individual scripts with `--help` for usage information
+4. Check CloudWatch logs for Lambda function issues
+
+---
+
+**Last Updated**: March 2026  
+**Scripts Version**: 2.0

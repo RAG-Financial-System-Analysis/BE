@@ -76,6 +76,15 @@ namespace RAG.Infrastructure.Services
             // 4. Extract PDF Content and Metrics
             var extractionResult = await _pdfExtractService.ExtractAllAsync(request.File);
 
+            // Log PDF type để debug
+            _logger.LogInformation($"PDF Type detected: {extractionResult.PdfType}");
+
+            // Kiểm tra nếu là PDF ảnh
+            if (extractionResult.PdfType == "ImageBased")
+            {
+                _logger.LogWarning("Image-based PDF detected. Using Gemini Vision for OCR processing.");
+            }
+
             // 5. Upload file logic (Mocking specific file storage: e.g. S3 here. For now, we will store locally or just save the name)
             var fileName = $"{Guid.NewGuid()}_{request.File.FileName}";
             var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "reports");
@@ -106,8 +115,8 @@ namespace RAG.Infrastructure.Services
                     Fileurl = fileUrl,
                     Contentraw = extractionResult.Text,
                     Visibility = string.IsNullOrEmpty(request.Visibility) ? "private" : request.Visibility,
-                    Createdat = DateTime.Now,
-                    Updatedat = DateTime.Now
+                    Createdat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified),
+                    Updatedat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified)
                 };
 
                 await _context.ReportFinancials.AddAsync(reportFinancial);
@@ -132,7 +141,7 @@ namespace RAG.Infrastructure.Services
                                 Reportid = reportFinancial.Id,
                                 Definitionid = defId,
                                 Value = metric.Value,
-                                Createdat = DateTime.Now
+                                Createdat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified)
                             };
                             await _context.RatioValues.AddAsync(ratioValue);
 
@@ -157,9 +166,12 @@ namespace RAG.Infrastructure.Services
                 return new UploadReportResponse
                 {
                     ReportId = reportFinancial.Id,
-                    Message = "Upload successful",
+                    Message = extractionResult.PdfType == "ImageBased" 
+                        ? "Upload successful - Image-based PDF processed with Gemini Vision" 
+                        : "Upload successful",
                     MetricsExtracted = metricResponses.Count,
                     PageCount = extractionResult.PageCount,
+                    PdfType = extractionResult.PdfType, // NEW: Include PDF type in response
                     Metrics = metricResponses
                 };
             }
@@ -348,7 +360,7 @@ namespace RAG.Infrastructure.Services
             }
 
             report.Visibility = visibility.ToLower();
-            report.Updatedat = DateTime.Now;
+            report.Updatedat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
 
             _context.ReportFinancials.Update(report);
             await _context.SaveChangesAsync();

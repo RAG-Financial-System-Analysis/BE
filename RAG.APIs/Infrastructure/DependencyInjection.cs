@@ -56,6 +56,15 @@ namespace RAG.APIs.Infrastructure
             services.AddScoped<IReportService, ReportService>();
             services.AddScoped<IChatService, ChatService>();
             services.AddScoped<IRagService, RagService>();
+            
+            // NEW: Gemini Service with configurable timeout
+            services.AddHttpClient<IGeminiService, GeminiService>(client =>
+            {
+                var timeoutMinutes = configuration.GetValue<int>("RAG:RequestTimeoutMinutes", 10);
+                client.Timeout = TimeSpan.FromMinutes(timeoutMinutes);
+            });
+            services.AddScoped<IGeminiService, GeminiService>();
+            
             services.AddTransient<IClaimsTransformation, RoleClaimsTransformation>();
             services.AddScoped<DbInitializer>();
             //

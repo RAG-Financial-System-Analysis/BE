@@ -15,7 +15,7 @@ source "$SCRIPT_DIR/validate-aws-cli.sh"
 
 # Configuration variables
 ENVIRONMENT="${ENVIRONMENT:-dev}"
-PROJECT_NAME="${PROJECT_NAME:-myapp}"
+PROJECT_NAME="${PROJECT_NAME:-myragapp}"
 ROLLBACK_SCOPE="${ROLLBACK_SCOPE:-all}"  # all, lambda, rds, iam, partial
 CHECKPOINT_NAME="${CHECKPOINT_NAME:-}"
 FORCE_ROLLBACK="${FORCE_ROLLBACK:-false}"

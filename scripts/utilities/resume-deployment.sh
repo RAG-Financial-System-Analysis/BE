@@ -15,7 +15,7 @@ source "$SCRIPT_DIR/validate-aws-cli.sh"
 
 # Configuration variables
 ENVIRONMENT="${ENVIRONMENT:-dev}"
-PROJECT_NAME="${PROJECT_NAME:-myapp}"
+PROJECT_NAME="${PROJECT_NAME:-myragapp}"
 MODE="${MODE:-initial}"
 CHECKPOINT_NAME="${CHECKPOINT_NAME:-}"
 FORCE_RESUME="${FORCE_RESUME:-false}"

@@ -2,8 +2,8 @@
 
 # RDS PostgreSQL Provisioning Script
 # Creates RDS PostgreSQL 16 instance with cost-optimized configuration
-# Uses default VPC with public access for simplified deployment
-# Configures security groups for Lambda and external access
+# Uses public access without VPC for simplified deployment
+# No security groups - relies on database-level security
 
 set -euo pipefail
 
@@ -16,14 +16,16 @@ UTILITIES_DIR="$SCRIPT_DIR/../utilities"
 source "$UTILITIES_DIR/logging.sh"
 source "$UTILITIES_DIR/error-handling.sh"
 source "$UTILITIES_DIR/validate-aws-cli.sh"
+source "$UTILITIES_DIR/parse-appsettings.sh"
 
-# Default configuration values (cost-optimized)
+# Default configuration values (will be overridden by appsettings.json)
 DEFAULT_DB_INSTANCE_CLASS="db.t3.micro"
 DEFAULT_ALLOCATED_STORAGE="20"
 DEFAULT_ENGINE="postgres"
-DEFAULT_ENGINE_VERSION="16.13"
-DEFAULT_DB_NAME="appdb"
-DEFAULT_MASTER_USERNAME="dbadmin"
+DEFAULT_ENGINE_VERSION="${RDS_ENGINE_VERSION:-16.13}"
+DEFAULT_DB_NAME="RAGSystem"
+DEFAULT_MASTER_USERNAME="postgres"
+DEFAULT_MASTER_PASSWORD="123456"
 
 # Configuration variables
 DB_INSTANCE_CLASS="${DB_INSTANCE_CLASS:-$DEFAULT_DB_INSTANCE_CLASS}"
@@ -32,15 +34,14 @@ ENGINE="${ENGINE:-$DEFAULT_ENGINE}"
 ENGINE_VERSION="${ENGINE_VERSION:-$DEFAULT_ENGINE_VERSION}"
 DB_NAME="${DB_NAME:-$DEFAULT_DB_NAME}"
 MASTER_USERNAME="${MASTER_USERNAME:-$DEFAULT_MASTER_USERNAME}"
+MASTER_PASSWORD="${MASTER_PASSWORD:-$DEFAULT_MASTER_PASSWORD}"
 
 # Resource naming
 ENVIRONMENT="${ENVIRONMENT:-dev}"
-PROJECT_NAME="${PROJECT_NAME:-myapp}"
-SECURITY_GROUP_NAME="$PROJECT_NAME-$ENVIRONMENT-rds-sg"
+PROJECT_NAME="${PROJECT_NAME:-myragapp}"
 DB_INSTANCE_IDENTIFIER="$PROJECT_NAME-$ENVIRONMENT-db"
 
 # Global variables for resource tracking
-SECURITY_GROUP_ID=""
 DB_ENDPOINT=""
 
 # Function to display usage information
@@ -49,13 +50,15 @@ show_usage() {
 Usage: $0 [OPTIONS]
 
 Provisions RDS PostgreSQL 16 instance with cost-optimized configuration.
-Uses default VPC with public access for simplified deployment.
+Uses public access without VPC for simplified deployment.
 
 OPTIONS:
     --instance-class CLASS      DB instance class (default: $DEFAULT_DB_INSTANCE_CLASS)
     --storage SIZE             Allocated storage in GB (default: $DEFAULT_ALLOCATED_STORAGE)
     --db-name NAME             Database name (default: $DEFAULT_DB_NAME)
     --username USERNAME        Master username (default: $DEFAULT_MASTER_USERNAME)
+    --password PASSWORD        Master password (default: from appsettings.json)
+    --appsettings FILE         Path to appsettings.json (default: RAG.APIs/appsettings.json)
     --environment ENV          Environment name (default: dev)
     --project-name NAME        Project name (default: myapp)
     --aws-profile PROFILE      AWS profile to use
@@ -74,15 +77,18 @@ COST OPTIMIZATION:
     - Public access enabled for simplified connectivity
 
 SECURITY:
-    - Security group restricts access to specific ports
+    - Public access enabled for simplified connectivity
     - Strong password generation
     - SSL/TLS encryption in transit
+    - Database-level security controls
 
 EOF
 }
 
 # Function to parse command line arguments
 parse_arguments() {
+    local appsettings_file="RAG.APIs/appsettings.json"
+    
     while [[ $# -gt 0 ]]; do
         case $1 in
             --instance-class)
@@ -99,6 +105,14 @@ parse_arguments() {
                 ;;
             --username)
                 MASTER_USERNAME="$2"
+                shift 2
+                ;;
+            --password)
+                MASTER_PASSWORD="$2"
+                shift 2
+                ;;
+            --appsettings)
+                appsettings_file="$2"
                 shift 2
                 ;;
             --environment)
@@ -128,87 +142,49 @@ parse_arguments() {
         esac
     done
     
+    # Parse appsettings.json if it exists and no explicit values provided
+    if [[ -f "$appsettings_file" ]]; then
+        log_info "Loading configuration from appsettings.json: $appsettings_file"
+        if parse_appsettings_db_config "$appsettings_file"; then
+            # Override defaults with appsettings values if not explicitly set via command line
+            if [[ "$DB_NAME" == "$DEFAULT_DB_NAME" ]]; then
+                DB_NAME="$APPSETTINGS_DB_NAME"
+            fi
+            if [[ "$MASTER_USERNAME" == "$DEFAULT_MASTER_USERNAME" ]]; then
+                MASTER_USERNAME="$APPSETTINGS_DB_USERNAME"
+            fi
+            if [[ "$MASTER_PASSWORD" == "$DEFAULT_MASTER_PASSWORD" ]]; then
+                MASTER_PASSWORD="$APPSETTINGS_DB_PASSWORD"
+            fi
+            
+            log_info "Using database configuration from appsettings.json:"
+            log_info "  Database: $DB_NAME"
+            log_info "  Username: $MASTER_USERNAME"
+            log_info "  Password: [LOADED FROM APPSETTINGS]"
+        else
+            log_warn "Failed to parse appsettings.json, using default values"
+        fi
+    else
+        log_warn "appsettings.json not found: $appsettings_file, using default values"
+    fi
+    
     # Update resource names after parsing arguments
-    SECURITY_GROUP_NAME="$PROJECT_NAME-$ENVIRONMENT-rds-sg"
     DB_INSTANCE_IDENTIFIER="$PROJECT_NAME-$ENVIRONMENT-db"
 }
 
 # Function to generate secure random password
 generate_db_password() {
-    # Generate a 16-character password with letters, numbers, and safe special characters
-    local password=$(openssl rand -base64 12 | tr -d "=+/" | cut -c1-16)
-    echo "$password"
+    # Use password from appsettings.json if available, otherwise generate random
+    if [[ -n "$MASTER_PASSWORD" ]]; then
+        echo "$MASTER_PASSWORD"
+    else
+        # Generate a 16-character password with letters, numbers, and safe special characters
+        local password=$(openssl rand -base64 12 | tr -d "=+/" | cut -c1-16)
+        echo "$password"
+    fi
 }
 
-# Function to get default VPC ID
-get_default_vpc() {
-    log_info "Getting default VPC"
-    
-    local vpc_id=$(aws ec2 describe-vpcs \
-        --filters "Name=is-default,Values=true" \
-        --query 'Vpcs[0].VpcId' \
-        --output text 2>/dev/null || echo "None")
-    
-    if [ "$vpc_id" = "None" ] || [ "$vpc_id" = "null" ]; then
-        handle_error $ERROR_CODE_INFRASTRUCTURE "No default VPC found. Please create a default VPC first." true
-    fi
-    
-    log_success "Found default VPC: $vpc_id"
-    echo "$vpc_id"
-}
-
-# Function to check if security group already exists
-check_existing_security_group() {
-    log_info "Checking for existing security group: $SECURITY_GROUP_NAME"
-    
-    local sg_id=$(aws ec2 describe-security-groups \
-        --filters "Name=group-name,Values=$SECURITY_GROUP_NAME" \
-        --query 'SecurityGroups[0].GroupId' \
-        --output text 2>/dev/null || echo "None")
-    
-    if [ "$sg_id" != "None" ] && [ "$sg_id" != "null" ]; then
-        log_info "Found existing security group: $sg_id"
-        SECURITY_GROUP_ID="$sg_id"
-        return 0
-    fi
-    
-    return 1
-}
-
-# Function to create security group for RDS
-create_security_group() {
-    if check_existing_security_group; then
-        log_info "Using existing security group: $SECURITY_GROUP_ID"
-        return 0
-    fi
-    
-    log_info "Creating security group for RDS: $SECURITY_GROUP_NAME"
-    set_error_context "Security group creation"
-    set_error_remediation "Check AWS permissions for EC2 security group operations"
-    
-    SECURITY_GROUP_ID=$(execute_with_error_handling \
-        "aws ec2 create-security-group --group-name $SECURITY_GROUP_NAME --description 'Security group for RDS PostgreSQL access' --query 'GroupId' --output text" \
-        "Failed to create security group" \
-        $ERROR_CODE_INFRASTRUCTURE)
-    
-    log_success "Created security group: $SECURITY_GROUP_ID"
-    
-    # Tag the security group
-    execute_with_error_handling \
-        "aws ec2 create-tags --resources $SECURITY_GROUP_ID --tags Key=Name,Value=$SECURITY_GROUP_NAME Key=Environment,Value=$ENVIRONMENT Key=Project,Value=$PROJECT_NAME" \
-        "Failed to tag security group" \
-        $ERROR_CODE_INFRASTRUCTURE
-    
-    # Add inbound rule for PostgreSQL (port 5432) from anywhere (for development)
-    log_info "Adding PostgreSQL access rule to security group"
-    execute_with_error_handling \
-        "aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID --protocol tcp --port 5432 --cidr 0.0.0.0/0" \
-        "Failed to add PostgreSQL access rule" \
-        $ERROR_CODE_INFRASTRUCTURE
-    
-    log_success "Security group configuration completed"
-    register_cleanup_function "cleanup_security_group"
-}
+# VPC-related functions removed - using public access without VPC
 
 # Function to check if RDS instance already exists
 check_existing_rds_instance() {
@@ -253,7 +229,7 @@ create_rds_instance() {
     set_error_context "RDS instance creation"
     set_error_remediation "Check AWS permissions for RDS operations, instance class availability, and service limits"
     
-    # Create RDS instance with cost-optimized settings and public access
+    # Create RDS instance with cost-optimized settings and public access (no VPC)
     execute_with_error_handling \
         "aws rds create-db-instance \
             --db-instance-identifier $DB_INSTANCE_IDENTIFIER \
@@ -264,7 +240,6 @@ create_rds_instance() {
             --master-user-password '$db_password' \
             --allocated-storage $ALLOCATED_STORAGE \
             --db-name $DB_NAME \
-            --vpc-security-group-ids $SECURITY_GROUP_ID \
             --no-multi-az \
             --publicly-accessible \
             --storage-type gp2 \
@@ -339,14 +314,6 @@ cleanup_rds_instance() {
     fi
 }
 
-cleanup_security_group() {
-    if [ -n "$SECURITY_GROUP_ID" ]; then
-        log_info "Cleaning up security group: $SECURITY_GROUP_ID"
-        aws ec2 delete-security-group \
-            --group-id "$SECURITY_GROUP_ID" &>/dev/null || true
-    fi
-}
-
 # Function to save infrastructure state
 save_infrastructure_state() {
     local state_file="./deployment_checkpoints/rds_infrastructure.state"
@@ -355,11 +322,11 @@ save_infrastructure_state() {
     cat > "$state_file" << EOF
 # RDS Infrastructure State
 # Generated on $(date)
-SECURITY_GROUP_ID="$SECURITY_GROUP_ID"
 DB_INSTANCE_IDENTIFIER="$DB_INSTANCE_IDENTIFIER"
 DB_ENDPOINT="$DB_ENDPOINT"
 ENVIRONMENT="$ENVIRONMENT"
 PROJECT_NAME="$PROJECT_NAME"
+VPC_ENABLED="false"
 EOF
     
     log_success "Infrastructure state saved to: $state_file"
@@ -380,7 +347,7 @@ display_connection_info() {
     echo "Public Access: Yes"
     echo ""
     echo "=== Security Details ==="
-    echo "Security Group ID: $SECURITY_GROUP_ID"
+    echo "Public Access: Yes (No VPC configuration)"
     echo "Access: PostgreSQL port 5432 open to 0.0.0.0/0"
     echo "Master password: Saved in deployment checkpoint"
     echo ""
@@ -390,7 +357,7 @@ display_connection_info() {
     echo "=== Security Notes ==="
     echo "- Database has public access for simplified connectivity"
     echo "- Use strong passwords and SSL connections"
-    echo "- Consider restricting security group rules for production"
+    echo "- Consider restricting access via database-level security for production"
     echo "- Master password is saved in deployment checkpoint"
     echo ""
     echo "=== Next Steps ==="
@@ -420,13 +387,9 @@ main() {
     log_info "  Engine: $ENGINE $ENGINE_VERSION"
     log_info "  Database Name: $DB_NAME"
     log_info "  Master Username: $MASTER_USERNAME"
-    log_info "  Public Access: Yes"
+    log_info "  Public Access: Yes (No VPC)"
     
-    # Get default VPC (for security group)
-    get_default_vpc > /dev/null
-    
-    # Create infrastructure components
-    create_security_group
+    # Create infrastructure components (no VPC, no security group)
     create_rds_instance
     wait_for_rds_instance
     

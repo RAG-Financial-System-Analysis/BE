@@ -23,7 +23,7 @@ CHECKPOINT_DIR="./deployment_checkpoints"
 
 # Default values
 ENVIRONMENT="dev"
-PROJECT_NAME="myapp"
+PROJECT_NAME="myragapp"
 AWS_REGION="ap-southeast-1"
 MODE="initial"
 DRY_RUN=false

@@ -16,7 +16,7 @@ source "$UTILITIES_DIR/validate-aws-cli.sh"
 
 # Configuration variables
 ENVIRONMENT="${ENVIRONMENT:-dev}"
-PROJECT_NAME="${PROJECT_NAME:-myapp}"
+PROJECT_NAME="${PROJECT_NAME:-myragapp}"
 LAMBDA_FUNCTION_NAME="$PROJECT_NAME-$ENVIRONMENT-api"
 
 # Update modes

@@ -108,7 +108,7 @@ namespace RAG.Infrastructure.AWS.Implements
                     Email = item.Email,
                     Fullname = item.FullName,
                     Roleid = roleMember.Id,
-                    Createdat = DateTime.UtcNow.ToLocalTime()
+                    Createdat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified)
                 };
 
                 await _userRepository.AddAsync(newUser);
