@@ -1,44 +1,44 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using OpenAI.Chat;
+using RAG.Application.Interfaces;
 
 [ApiController]
 [Route("api/[controller]")]
 public class TestAIController : ControllerBase
 {
-    private readonly IConfiguration _configuration;
+    private readonly IGeminiService _geminiService;
 
-    public TestAIController(IConfiguration configuration)
+    public TestAIController(IGeminiService geminiService)
     {
-        _configuration = configuration;
+        _geminiService = geminiService;
     }
     [HttpGet("openai")]
     public async Task<IActionResult> TestOpenAI()
     {
         try
         {
-            var apiKey = _configuration["OpenAI:ApiKey"];
-            if (string.IsNullOrEmpty(apiKey))
-                return BadRequest("OpenAI API Key not configured");
-
-            var client = new ChatClient("gpt-4.1-mini", apiKey);
-
-            var messages = new List<ChatMessage>
-            {
-                new UserChatMessage("Say 'Hello from Vietnam!' in Vietnamese")
-            };
-
-            var completion = await client.CompleteChatAsync(messages);
-            var answer = completion.Value.Content[0].Text;
+            var response = await _geminiService.GenerateAsync("Say 'Hello from Vietnam!' in Vietnamese");
 
             return Ok(new
             {
                 status = "success",
-                message = "OpenAI connection successful",
-                response = answer
+                message = "Gemini connection successful",
+                response = response
             });
         }
         catch (Exception ex)
         {
+            // Check if it's a high demand error (503)
+            if (ex.Message.Contains("503") || ex.Message.Contains("high demand") || ex.Message.Contains("UNAVAILABLE"))
+            {
+                return StatusCode(503, new
+                {
+                    status = "service_unavailable",
+                    message = "Gemini API is experiencing high demand. Please try again in a few minutes.",
+                    details = "This is a temporary issue from Google's Gemini service.",
+                    suggestion = "Try again later or consider using a different model."
+                });
+            }
+
             return StatusCode(500, new
             {
                 status = "error",
