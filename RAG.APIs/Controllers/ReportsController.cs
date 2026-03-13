@@ -137,14 +137,10 @@ namespace RAG.APIs.Controllers
                     return Unauthorized("User is not authenticated.");
                 }
 
-                var (filePath, fileName) = await _reportService.DownloadReportAsync(id, internalUserId, roleClaim ?? "");
+                var (s3Url, fileName) = await _reportService.DownloadReportAsync(id, internalUserId, roleClaim ?? "");
 
-                if (!System.IO.File.Exists(filePath))
-                {
-                    return NotFound(new { Message = "The file does not exist on the server." });
-                }
-
-                return PhysicalFile(filePath, "application/pdf", fileName);
+                // ✅ FIXED: Redirect to S3 URL instead of serving local file
+                return Redirect(s3Url);
             }
             // 404 Not Found (Từ Service hoặc Controller)
             catch (KeyNotFoundException ex)

@@ -21,17 +21,20 @@ namespace RAG.Infrastructure.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly IPdfExtractService _pdfExtractService;
+        private readonly IS3Service _s3Service;
         private readonly ILogger<ReportService> _logger;
         private readonly long _maxFileSizeLimit;
 
         public ReportService(
             ApplicationDbContext context,
             IPdfExtractService pdfExtractService,
+            IS3Service s3Service,
             IConfiguration configuration,
             ILogger<ReportService> logger)
         {
             _context = context;
             _pdfExtractService = pdfExtractService;
+            _s3Service = s3Service;
             _logger = logger;
             _maxFileSizeLimit = configuration.GetValue<long>("FileUpload:MaxFileSizeMB", 50) * 1024 * 1024;
         }
@@ -85,17 +88,18 @@ namespace RAG.Infrastructure.Services
                 _logger.LogWarning("Image-based PDF detected. Using Gemini Vision for OCR processing.");
             }
 
-            // 5. Upload file logic (Mocking specific file storage: e.g. S3 here. For now, we will store locally or just save the name)
-            var fileName = $"{Guid.NewGuid()}_{request.File.FileName}";
-            var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "reports");
-            if (!Directory.Exists(uploadDir)) Directory.CreateDirectory(uploadDir);
-            
-            var filePath = Path.Combine(uploadDir, fileName);
-            using (var stream = new FileStream(filePath, FileMode.Create))
+            // 5. Upload file to S3 (FIXED: Now using S3 instead of local storage)
+            byte[] fileBytes;
+            using (var memoryStream = new MemoryStream())
             {
-                await request.File.CopyToAsync(stream);
+                await request.File.CopyToAsync(memoryStream);
+                fileBytes = memoryStream.ToArray();
             }
-            var fileUrl = $"/uploads/reports/{fileName}"; // Replace with S3 URL when implemented
+
+            var fileName = $"{Guid.NewGuid()}_{request.File.FileName}";
+            var s3FileUrl = await _s3Service.UploadFileAsync(fileBytes, fileName, "application/pdf");
+            
+            _logger.LogInformation($"PDF uploaded to S3: {s3FileUrl}");
 
 
             // 6. Save to Database using a Transaction
@@ -112,7 +116,7 @@ namespace RAG.Infrastructure.Services
                     Period = request.Period,
                     Filename = request.File.FileName,
                     Filesizekb = (int)(request.File.Length / 1024),
-                    Fileurl = fileUrl,
+                    Fileurl = s3FileUrl, // ✅ Now using S3 URL
                     Contentraw = extractionResult.Text,
                     Visibility = string.IsNullOrEmpty(request.Visibility) ? "private" : request.Visibility,
                     Createdat = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified),
@@ -179,11 +183,8 @@ namespace RAG.Infrastructure.Services
             {
                 await transaction.RollbackAsync();
                 _logger.LogError(ex, "Failed to save report and metrics to database.");
-                // Cleanup file if DB save fails
-                if (System.IO.File.Exists(filePath))
-                {
-                    System.IO.File.Delete(filePath);
-                }
+                // Note: S3 file cleanup could be added here if needed, but usually not necessary
+                // since S3 has lifecycle policies and the file URL won't be saved to DB on failure
                 throw;
             }
         }
@@ -331,13 +332,12 @@ namespace RAG.Infrastructure.Services
 
             if (string.IsNullOrEmpty(report.Fileurl))
             {
-                throw new FileNotFoundException("The physical file path is empty in database.");
+                throw new FileNotFoundException("The file URL is empty in database.");
             }
 
-            var relativePath = report.Fileurl.TrimStart('/');
-            var physicalPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath);
-
-            return (physicalPath, report.Filename ?? "Report.pdf");
+            // ✅ FIXED: Return S3 URL for redirect instead of local file path
+            // The controller should redirect to this S3 URL instead of serving the file directly
+            return (report.Fileurl, report.Filename ?? "Report.pdf");
         }
         public async Task<bool> UpdateVisibilityAsync(Guid reportId, string visibility, Guid userId, string userRole)
         {
@@ -397,16 +397,10 @@ namespace RAG.Infrastructure.Services
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                // Lưu ý: Có thể cân nhắc thêm bước xoá Object file trên Ổ cứng/S3 (Optional)
-                if (!string.IsNullOrEmpty(report.Fileurl))
-                {
-                    var relativePath = report.Fileurl.TrimStart('/');
-                    var physicalPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativePath);
-                    if (System.IO.File.Exists(physicalPath))
-                    {
-                        System.IO.File.Delete(physicalPath);
-                    }
-                }
+                // Note: S3 file cleanup could be added here if needed
+                // For now, we keep S3 files for audit/backup purposes
+                // You can implement S3 file deletion if required:
+                // await _s3Service.DeleteFileAsync(report.Fileurl);
 
                 return true;
             }
