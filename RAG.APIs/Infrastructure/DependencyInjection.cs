@@ -1,4 +1,4 @@
-﻿using Amazon.CognitoIdentityProvider;
+using Amazon.CognitoIdentityProvider;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +28,8 @@ namespace RAG.APIs.Infrastructure
             var awsOptions = configuration.GetAWSOptions();
             var accessKey = configuration["AWS:AccessKey"];
             var secretKey = configuration["AWS:SecretKey"];
+            
+            // ✅ FIXED: Set credentials only once
             if (!string.IsNullOrEmpty(accessKey) && !string.IsNullOrEmpty(secretKey))
             {
                 awsOptions.Credentials = new Amazon.Runtime.BasicAWSCredentials(accessKey, secretKey);
@@ -36,10 +38,6 @@ namespace RAG.APIs.Infrastructure
             services.AddDefaultAWSOptions(awsOptions);
             services.AddAWSService<IAmazonCognitoIdentityProvider>();
             services.AddAWSService<Amazon.S3.IAmazonS3>();
-            if (!string.IsNullOrEmpty(accessKey) && !string.IsNullOrEmpty(secretKey))
-            {
-                awsOptions.Credentials = new Amazon.Runtime.BasicAWSCredentials(accessKey, secretKey);
-            }
 
             // 3. Đăng ký các Repository và Service
             services.AddScoped<IUserRepository, UserRepository>();
@@ -60,8 +58,16 @@ namespace RAG.APIs.Infrastructure
             // NEW: Gemini Service with configurable timeout
             services.AddHttpClient<IGeminiService, GeminiService>(client =>
             {
-                var timeoutMinutes = configuration.GetValue<int>("RAG:RequestTimeoutMinutes", 10);
+                // ✅ FIXED: Use Gemini specific timeout and ensure it's long enough for PDF processing
+                var geminiTimeoutMinutes = configuration.GetValue<int>("Gemini:TimeoutMinutes", 15);
+                var ragTimeoutMinutes = configuration.GetValue<int>("RAG:RequestTimeoutMinutes", 25);
+                
+                // Use the longer timeout between Gemini and RAG settings
+                var timeoutMinutes = Math.Max(geminiTimeoutMinutes, ragTimeoutMinutes);
+                
                 client.Timeout = TimeSpan.FromMinutes(timeoutMinutes);
+                
+                Console.WriteLine($"🔧 Gemini HttpClient timeout set to: {timeoutMinutes} minutes ({timeoutMinutes * 60} seconds)");
             });
             services.AddScoped<IGeminiService, GeminiService>();
             

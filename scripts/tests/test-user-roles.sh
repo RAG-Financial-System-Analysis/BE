@@ -8,12 +8,12 @@ echo "🔐 Testing user roles..."
 
 echo ""
 echo "=== Testing Admin User ==="
-echo "Email: admin@rag.com"
-echo "Password: Admin@123!!"
+echo "Email: admin@yourdomain.com"
+echo "Password: YourSecureAdminPassword"
 
 ADMIN_RESPONSE=$(curl -s -X POST "$API_URL/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@rag.com","password":"Admin@123!!"}')
+  -d '{"email":"admin@yourdomain.com","password":"YourSecureAdminPassword"}')
 
 if echo "$ADMIN_RESPONSE" | grep -q "accessToken"; then
     echo "✅ Admin login successful"
@@ -35,12 +35,12 @@ fi
 
 echo ""
 echo "=== Testing Analyst User ==="
-echo "Email: analyst@rag.com"
-echo "Password: Analyst@123!!"
+echo "Email: analyst@yourdomain.com"
+echo "Password: YourSecureAnalystPassword"
 
 ANALYST_RESPONSE=$(curl -s -X POST "$API_URL/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"analyst@rag.com","password":"Analyst@123!!"}')
+  -d '{"email":"analyst@yourdomain.com","password":"YourSecureAnalystPassword"}')
 
 if echo "$ANALYST_RESPONSE" | grep -q "accessToken"; then
     echo "✅ Analyst login successful"

@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# Simple test script for seeding - EXAMPLE
+echo "Testing new seeding flow..."
+
+# Configuration - REPLACE WITH YOUR VALUES
+USER_POOL_ID="your-cognito-user-pool-id"
+CLIENT_ID="your-cognito-client-id"
+DB_HOST="your-rds-endpoint.region.rds.amazonaws.com"
+DB_PORT="5432"
+DB_NAME="RAGSystem"
+DB_USERNAME="postgres"
+DB_PASSWORD="your-db-password"
+
+echo "✅ Configuration loaded"
+echo "Database: $DB_HOST:$DB_PORT/$DB_NAME"
+echo "User Pool: $USER_POOL_ID"
+
+# Test database connection
+echo "Testing database connection..."
+PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -d "$DB_NAME" -U "$DB_USERNAME" -p "$DB_PORT" -c "SELECT 1;" > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "✅ Database connection successful"
+else
+    echo "❌ Database connection failed"
+    exit 1
+fi
+
+# Test AWS CLI
+echo "Testing AWS CLI..."
+aws sts get-caller-identity > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "✅ AWS CLI working"
+else
+    echo "❌ AWS CLI failed"
+    exit 1
+fi
+
+echo "🎉 All tests passed! Ready for seeding."

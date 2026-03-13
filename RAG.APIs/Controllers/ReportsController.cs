@@ -137,10 +137,14 @@ namespace RAG.APIs.Controllers
                     return Unauthorized("User is not authenticated.");
                 }
 
-                var (s3Url, fileName) = await _reportService.DownloadReportAsync(id, internalUserId, roleClaim ?? "");
+                var (presignedUrl, fileName) = await _reportService.DownloadReportAsync(id, internalUserId, roleClaim ?? "");
 
-                // ✅ FIXED: Redirect to S3 URL instead of serving local file
-                return Redirect(s3Url);
+                // ✅ NEW: Return JSON with download URL instead of redirect
+                return Ok(new { 
+                    downloadUrl = presignedUrl, 
+                    fileName = fileName,
+                    message = "Download URL generated successfully" 
+                });
             }
             // 404 Not Found (Từ Service hoặc Controller)
             catch (KeyNotFoundException ex)

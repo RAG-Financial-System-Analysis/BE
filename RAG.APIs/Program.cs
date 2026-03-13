@@ -34,11 +34,14 @@ builder.Services.Configure<IISServerOptions>(options =>
 builder.WebHost.ConfigureKestrel(options =>
 {
     var maxFileSizeMB = builder.Configuration.GetValue<int>("RAG:MaxFileSizeMB", 100);
-    var timeoutMinutes = builder.Configuration.GetValue<int>("RAG:RequestTimeoutMinutes", 10);
+    var timeoutMinutes = builder.Configuration.GetValue<int>("RAG:RequestTimeoutMinutes", 25);
     
     options.Limits.MaxRequestBodySize = maxFileSizeMB * 1024 * 1024;
     options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(timeoutMinutes);
     options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(timeoutMinutes);
+    
+    // ✅ NEW: Add request timeout for long-running operations
+    Console.WriteLine($"🔧 Kestrel request timeout set to: {timeoutMinutes} minutes");
 });
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi

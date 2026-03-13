@@ -52,7 +52,7 @@ namespace RAG.Infrastructure.Services
             }
 
             // BƯỚC 1: RETRIEVAL - Tìm relevant documents
-            var relevantDocs = await RetrieveDocumentsAsync(question, userId);
+            var relevantDocs = await RetrieveDocumentsAsync(question, userId, sessionId);
 
             if (relevantDocs.Count == 0)
             {
@@ -119,108 +119,189 @@ namespace RAG.Infrastructure.Services
 
         private async Task<List<DocumentDto>> RetrieveDocumentsAsync(
             string query,
-            Guid userId)
+            Guid userId,
+            Guid sessionId)
         {
-            // Lấy user role
+            Console.WriteLine($"🔍 HYBRID SEARCH: Query='{query}'");
+
             var user = await _dbContext.Users
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.Id == userId);
-
-            if (user == null)
-                return new List<DocumentDto>();
-
+            
+            if (user == null) return new List<DocumentDto>();
             var isAdmin = user.Role.Name == "Admin";
 
-            // OLD SIMPLE SEARCH (Comment để backup)
-            /*
-            var reports = await _dbContext.ReportFinancials
-                .Include(r => r.Company)
-                .Where(r =>
-                    r.Contentraw != null &&
-                    r.Contentraw.Contains(query) // Simple search - quá cứng nhắc
-                )
-                .Where(r =>
-                    isAdmin ||                    // Admin xem tất cả
-                    r.Uploadedby == userId ||    // Owner xem của mình
-                    r.Visibility == "public"     // Public files
-                )
-                .Take(5)
-                .ToListAsync();
-            */
-
-            // NEW HYBRID APPROACH - Multi-strategy search for better recall
             var baseQuery = _dbContext.ReportFinancials
                 .Include(r => r.Company)
                 .Include(r => r.Category)
                 .Where(r =>
-                    isAdmin ||                    // Admin xem tất cả
-                    r.Uploadedby == userId ||    // Owner xem của mình
-                    r.Visibility == "public"     // Public files
-                );
+                    isAdmin ||
+                    r.Uploadedby == userId ||
+                    r.Visibility == "public"
+                )
+                .Where(r => r.Contentraw != null);
 
             var reports = new List<RAG.Domain.ReportFinancial>();
 
-            // STRATEGY 1: Financial Keywords Search (Highest Priority)
+            // CHIẾN LƯỢC 1: FINANCIAL KEYWORDS (Ưu tiên cao)
+            Console.WriteLine("🔍 Strategy 1: Financial Keywords");
             var financialKeywords = ExtractFinancialKeywords(query);
+            Console.WriteLine($"Financial keywords: [{string.Join(", ", financialKeywords)}]");
+            
             if (financialKeywords.Any())
             {
                 var financialReports = await baseQuery
-                    .Where(r => r.Contentraw != null && 
-                               financialKeywords.Any(k => r.Contentraw.Contains(k)))
+                    .Where(r => financialKeywords.Any(k => r.Contentraw.ToLower().Contains(k.ToLower())))
                     .OrderByDescending(r => r.Createdat)
                     .Take(3)
                     .ToListAsync();
                 
                 reports.AddRange(financialReports);
+                Console.WriteLine($"✅ Found {financialReports.Count} financial reports");
             }
 
-            // STRATEGY 2: Company/Ticker Search
+            // CHIẾN LƯỢC 2: COMPANY/TICKER SEARCH
             if (reports.Count < 5)
             {
+                Console.WriteLine("🔍 Strategy 2: Company/Ticker");
                 var companyKeywords = ExtractCompanyKeywords(query);
+                Console.WriteLine($"Company keywords: [{string.Join(", ", companyKeywords)}]");
                 
                 if (companyKeywords.Any())
                 {
                     var companyReports = await baseQuery
                         .Where(r => 
                             companyKeywords.Any(k => 
-                                r.Company.Name.Contains(k) || 
-                                r.Company.Ticker.Contains(k)
+                                r.Company.Name.ToLower().Contains(k.ToLower()) || 
+                                r.Company.Ticker.ToLower().Contains(k.ToLower())
                             )
                         )
+                        .OrderByDescending(r => r.Createdat)
                         .Take(5 - reports.Count)
                         .ToListAsync();
                     
                     reports.AddRange(companyReports.Where(r => !reports.Any(existing => existing.Id == r.Id)));
+                    Console.WriteLine($"✅ Found {companyReports.Count} company reports");
                 }
             }
 
-            // STRATEGY 3: General Keywords Search
+            // CHIẾN LƯỢC 3: GENERAL KEYWORDS
             if (reports.Count < 5)
             {
+                Console.WriteLine("🔍 Strategy 3: General Keywords");
                 var generalKeywords = ExtractGeneralKeywords(query);
+                Console.WriteLine($"General keywords: [{string.Join(", ", generalKeywords)}]");
                 
                 if (generalKeywords.Any())
                 {
                     var generalReports = await baseQuery
-                        .Where(r => r.Contentraw != null && 
-                                   generalKeywords.Any(k => r.Contentraw.Contains(k)))
+                        .Where(r => generalKeywords.Any(k => r.Contentraw.ToLower().Contains(k.ToLower())))
+                        .OrderByDescending(r => r.Createdat)
                         .Take(5 - reports.Count)
                         .ToListAsync();
                     
                     reports.AddRange(generalReports.Where(r => !reports.Any(existing => existing.Id == r.Id)));
+                    Console.WriteLine($"✅ Found {generalReports.Count} general reports");
                 }
             }
 
-            // STRATEGY 4: Fallback - Recent Reports (Always ensure some results)
+            // CHIẾN LƯỢC 4: FALLBACK - Recent reports (ENHANCED DEBUG)
             if (reports.Count < 5)
             {
-                var recentReports = await baseQuery
+                Console.WriteLine("🔍 Strategy 4: Fallback - Recent Reports");
+                
+                // Debug: Check total accessible reports first
+                var totalAccessible = await baseQuery.CountAsync();
+                Console.WriteLine($"📊 Total accessible reports: {totalAccessible}");
+                
+                if (totalAccessible == 0)
+                {
+                    Console.WriteLine("❌ NO ACCESSIBLE REPORTS - Check user permissions!");
+                    
+                    // Debug: Check if reports exist at all
+                    var totalReports = await _dbContext.ReportFinancials
+                        .Where(r => r.Contentraw != null)
+                        .CountAsync();
+                    Console.WriteLine($"📊 Total reports in DB: {totalReports}");
+                    
+                    // Debug: Check user's own reports
+                    var userReports = await _dbContext.ReportFinancials
+                        .Where(r => r.Uploadedby == userId && r.Contentraw != null)
+                        .CountAsync();
+                    Console.WriteLine($"📊 User's own reports: {userReports}");
+                    
+                    // Debug: Check public reports
+                    var publicReports = await _dbContext.ReportFinancials
+                        .Where(r => r.Visibility == "public" && r.Contentraw != null)
+                        .CountAsync();
+                    Console.WriteLine($"📊 Public reports: {publicReports}");
+                }
+                else
+                {
+                    // Get recent reports with detailed logging - INCREASED TO 5 FOR BETTER COVERAGE
+                    var recentReports = await baseQuery
+                        .OrderByDescending(r => r.Createdat)
+                        .Take(Math.Max(5, 5 - reports.Count)) // Always get at least 5 in fallback
+                        .ToListAsync();
+                    
+                    Console.WriteLine($"📄 Recent reports found: {recentReports.Count}");
+                    foreach (var report in recentReports)
+                    {
+                        var contentLength = report.Contentraw?.Length ?? 0;
+                        Console.WriteLine($"  - {report.Company.Ticker} ({report.Year} {report.Period}): {contentLength} chars, Visibility: {report.Visibility}");
+                        
+                        // Check if content is meaningful
+                        if (contentLength < 100)
+                        {
+                            Console.WriteLine($"    ⚠️ WARNING: Content too short ({contentLength} chars)");
+                        }
+                        if (string.IsNullOrWhiteSpace(report.Contentraw))
+                        {
+                            Console.WriteLine($"    ❌ ERROR: Content is null or whitespace");
+                        }
+                    }
+                    
+                    // Add reports that have meaningful content
+                    var meaningfulReports = recentReports.Where(r => 
+                        !string.IsNullOrWhiteSpace(r.Contentraw) && 
+                        r.Contentraw.Length >= 100
+                    );
+                    
+                    reports.AddRange(meaningfulReports.Where(r => !reports.Any(existing => existing.Id == r.Id)));
+                    Console.WriteLine($"✅ Added {meaningfulReports.Count()} meaningful reports");
+                }
+            }
+
+            Console.WriteLine($"🎯 TOTAL FOUND: {reports.Count} reports");
+
+            // ✅ ENHANCED DEBUG: Show detailed report info
+            if (reports.Count == 0)
+            {
+                Console.WriteLine("❌ NO REPORTS FOUND - This should not happen with fallback!");
+                
+                // Emergency fallback: Get ANY report with content
+                Console.WriteLine("🚨 EMERGENCY FALLBACK: Getting any report with content...");
+                var emergencyReports = await _dbContext.ReportFinancials
+                    .Include(r => r.Company)
+                    .Include(r => r.Category)
+                    .Where(r => 
+                        !string.IsNullOrWhiteSpace(r.Contentraw) && 
+                        r.Contentraw.Length > 50
+                    )
                     .OrderByDescending(r => r.Createdat)
-                    .Take(5 - reports.Count)
+                    .Take(3)
                     .ToListAsync();
                 
-                reports.AddRange(recentReports.Where(r => !reports.Any(existing => existing.Id == r.Id)));
+                reports.AddRange(emergencyReports);
+                Console.WriteLine($"🚨 Emergency fallback found: {emergencyReports.Count} reports");
+            }
+            else
+            {
+                foreach (var report in reports)
+                {
+                    var contentLength = report.Contentraw?.Length ?? 0;
+                    Console.WriteLine($"📄 {report.Company.Ticker} - {report.Company.Name} ({report.Year} {report.Period}) - {contentLength} chars");
+                }
             }
 
             // Build result
@@ -248,10 +329,6 @@ namespace RAG.Infrastructure.Services
                     Ticker = report.Company.Ticker,
                     Year = report.Year,
                     Period = report.Period,
-                    // OLD: Only 1000 characters
-                    // ContentSnippet = report.Contentraw?.Substring(0, Math.Min(1000, report.Contentraw.Length)) ?? "",
-                    
-                    // NEW: Send full content for Gemini Pro (1M tokens)
                     ContentSnippet = report.Contentraw ?? "",
                     Metrics = metrics
                 });
@@ -260,58 +337,45 @@ namespace RAG.Infrastructure.Services
             return results;
         }
 
-        // NEW HYBRID APPROACH - Keyword Extraction Methods
-        
-        /// <summary>
-        /// Extract financial terms and ratios from user query
-        /// </summary>
+        // ✅ HYBRID APPROACH: Smart keyword extraction methods
         private List<string> ExtractFinancialKeywords(string query)
         {
             var financialTerms = new[] { 
-                // English financial terms
                 "ROE", "ROA", "EPS", "P/E", "D/E", "EBITDA", "NPV", "IRR",
-                "revenue", "profit", "income", "assets", "liability", "equity",
-                "margin", "ratio", "growth", "dividend", "cash flow",
-                
-                // Vietnamese financial terms
-                "doanh thu", "lợi nhuận", "tài sản", "nợ phải trả", "vốn chủ sở hữu",
-                "tỷ suất", "hệ số", "tăng trưởng", "cổ tức", "dòng tiền",
-                "biên lợi nhuận", "khấu hao", "đầu tư", "chi phí", "thu nhập"
+                "doanh thu", "revenue", "sales",
+                "lợi nhuận", "profit", "income", "earnings",
+                "tài sản", "assets", "balance",
+                "nợ", "debt", "liability", "liabilities",
+                "vốn", "equity", "capital",
+                "margin", "ratio", "tỷ suất", "hệ số",
+                "cash flow", "dòng tiền", "thanh khoản",
+                "dividend", "cổ tức", "growth", "tăng trưởng"
             };
             
-            var keywords = new List<string>();
-            
-            // Add financial terms found in query (case insensitive)
-            keywords.AddRange(financialTerms.Where(term => 
-                query.ToLower().Contains(term.ToLower())));
-            
-            return keywords.Distinct().ToList();
+            return financialTerms
+                .Where(term => query.ToLower().Contains(term.ToLower()))
+                .ToList();
         }
 
-        /// <summary>
-        /// Extract company names and ticker symbols from user query
-        /// </summary>
         private List<string> ExtractCompanyKeywords(string query)
         {
-            // Common Vietnamese company names and tickers
+            // Common Vietnamese company names/tickers
             var companyTerms = new[] {
-                // Major Vietnamese stocks
                 "FPT", "VCB", "VNM", "VIC", "HPG", "MSN", "VHM", "GAS", "CTG", "BID",
                 "TCB", "MBB", "ACB", "VPB", "STB", "EIB", "SHB", "TPB", "LPB", "VIB",
-                
-                // Company names
                 "Vietcombank", "Vinamilk", "Vingroup", "Hoa Phat", "Masan", "Vinhomes",
-                "Techcombank", "Military Bank", "ACB", "VPBank", "Sacombank"
+                "Techcombank", "Military Bank", "VPBank", "Sacombank", "FPT Corporation"
             };
             
-            var words = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var words = query.Split(new char[] { ' ', ',', '.', ';', ':', '!', '?' }, 
+                StringSplitOptions.RemoveEmptyEntries);
             var keywords = new List<string>();
             
-            // Add known company terms (case insensitive)
+            // Add known company terms
             keywords.AddRange(companyTerms.Where(term => 
                 query.ToLower().Contains(term.ToLower())));
             
-            // Add potential ticker symbols (3-4 uppercase characters)
+            // Add potential ticker symbols (3-4 uppercase chars)
             keywords.AddRange(words.Where(w => 
                 w.Length >= 3 && w.Length <= 4 && w.All(char.IsUpper)));
             
@@ -322,31 +386,34 @@ namespace RAG.Infrastructure.Services
             return keywords.Distinct().ToList();
         }
 
-        /// <summary>
-        /// Extract general meaningful keywords from user query
-        /// </summary>
         private List<string> ExtractGeneralKeywords(string query)
         {
-            var words = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var words = query.Split(new char[] { ' ', ',', '.', ';', ':', '!', '?', '-', '_' }, 
+                StringSplitOptions.RemoveEmptyEntries);
             
             // Vietnamese stop words to filter out
             var stopWords = new[] { 
                 "của", "và", "cho", "với", "trong", "như", "thế", "nào", "gì", "là", "có",
                 "được", "sẽ", "đã", "đang", "về", "từ", "tại", "theo", "để", "khi", "nếu",
-                "the", "and", "for", "with", "in", "as", "what", "is", "are", "was", "were",
-                "will", "would", "could", "should", "can", "may", "might", "must", "shall"
+                "này", "đó", "những", "các", "một", "hai", "ba", "nhiều", "ít", "lớn", "nhỏ",
+                "the", "and", "for", "with", "in", "as", "what", "is", "are", "was", "were"
             };
             
-            // Filter meaningful words (>= 3 chars, not stop words, not numbers only)
-            var keywords = words
-                .Where(w => w.Length >= 3)
-                .Where(w => !stopWords.Contains(w.ToLower()))
+            // Filter meaningful words (>= 3 chars, not stop words)
+            return words
+                .Where(w => w.Length >= 3 && !stopWords.Contains(w.ToLower()))
                 .Where(w => !w.All(char.IsDigit)) // Exclude pure numbers
                 .Where(w => w.Any(char.IsLetter)) // Must contain at least one letter
+                .Select(w => w.Trim())
+                .Distinct()
                 .ToList();
-            
-            return keywords.Distinct().ToList();
         }
+
+        // REMOVED: All complex mapping and scoring methods
+        // - CalculateRelevanceScore
+        // - ExtractFinancialKeywords  
+        // - ExtractCompanyKeywords
+        // - ExtractGeneralKeywords
 
         private async Task<string> GenerateAnswerAsync(
             string question,

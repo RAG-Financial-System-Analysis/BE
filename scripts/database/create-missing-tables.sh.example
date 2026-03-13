@@ -1,0 +1,187 @@
+#!/bin/bash
+
+# Create Missing Tables Script
+# Creates the missing tables that are not in the current database
+
+set -euo pipefail
+
+# Source utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UTILITIES_DIR="$SCRIPT_DIR/../utilities"
+source "$UTILITIES_DIR/logging.sh"
+source "$UTILITIES_DIR/error-handling.sh"
+
+# Database configuration
+DB_HOST="your-rds-endpoint.region.rds.amazonaws.com"
+DB_PORT="5432"
+DB_NAME="RAGSystem"
+DB_USERNAME="postgres"
+DB_PASSWORD="your-db-password"
+
+# Function to execute SQL
+execute_sql() {
+    local sql="$1"
+    local description="$2"
+    
+    log_info "$description"
+    PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -d "$DB_NAME" -U "$DB_USERNAME" -p "$DB_PORT" -c "$sql" || {
+        log_error "Failed: $description"
+        return 1
+    }
+    log_success "✅ $description"
+}
+
+# Main function
+main() {
+    log_info "🔧 Creating missing tables in RAG System database..."
+    
+    # 1. Report Financial (CORE TABLE)
+    execute_sql "
+    CREATE TABLE IF NOT EXISTS report_financial (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        companyid UUID NOT NULL REFERENCES company(id) ON DELETE CASCADE,
+        categoryid UUID NOT NULL REFERENCES report_category(id) ON DELETE RESTRICT,
+        
+        -- Người upload (QUAN TRỌNG cho phân quyền!)
+        uploadedby UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        
+        -- Thông tin báo cáo
+        year INTEGER NOT NULL,
+        period VARCHAR(10),  -- 'Q1', 'Q2', 'Q3', 'Q4', 'Annual'
+        
+        -- File storage
+        fileurl TEXT NOT NULL,
+        filename VARCHAR(255),
+        filesizekb INTEGER,
+        
+        -- Content (QUAN TRỌNG cho RAG!)
+        contentraw TEXT,  -- Text đã extract từ PDF
+        
+        -- Phân quyền (QUAN TRỌNG!)
+        visibility VARCHAR(20) DEFAULT 'private',  -- 'private', 'public', 'team'
+        
+        -- Metadata
+        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        
+        CONSTRAINT chk_visibility CHECK (visibility IN ('private', 'public', 'team')),
+        CONSTRAINT unique_report UNIQUE (companyid, categoryid, year, period, uploadedby)
+    );
+    " "Creating report_financial table"
+    
+    # 2. Create indexes for report_financial
+    execute_sql "
+    CREATE INDEX IF NOT EXISTS idx_report_financial_company ON report_financial(companyid);
+    CREATE INDEX IF NOT EXISTS idx_report_financial_category ON report_financial(categoryid);
+    CREATE INDEX IF NOT EXISTS idx_report_financial_year ON report_financial(year);
+    CREATE INDEX IF NOT EXISTS idx_report_financial_uploaded_by ON report_financial(uploadedby);
+    CREATE INDEX IF NOT EXISTS idx_report_financial_visibility ON report_financial(visibility);
+    " "Creating indexes for report_financial"
+    
+    # 3. Ratio Value
+    execute_sql "
+    CREATE TABLE IF NOT EXISTS ratio_value (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        reportid UUID NOT NULL REFERENCES report_financial(id) ON DELETE CASCADE,
+        definitionid UUID NOT NULL REFERENCES ratio_definition(id) ON DELETE CASCADE,
+        
+        value DECIMAL(18, 4),
+        
+        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        
+        CONSTRAINT unique_ratio_value UNIQUE (reportid, definitionid)
+    );
+    " "Creating ratio_value table"
+    
+    # 4. Create indexes for ratio_value
+    execute_sql "
+    CREATE INDEX IF NOT EXISTS idx_ratio_value_report ON ratio_value(reportid);
+    CREATE INDEX IF NOT EXISTS idx_ratio_value_definition ON ratio_value(definitionid);
+    " "Creating indexes for ratio_value"
+    
+    # 5. Analytics Report
+    execute_sql "
+    CREATE TABLE IF NOT EXISTS analytics_report (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        sessionid UUID REFERENCES chat_sessions(id) ON DELETE CASCADE,
+        reportfinancialid UUID REFERENCES report_financial(id) ON DELETE SET NULL,
+        
+        title VARCHAR(255),
+        generatedcontent TEXT,  -- Nội dung phân tích (JSON/Text)
+        fileurl TEXT,  -- URL file phân tích (PDF, Excel, biểu đồ)
+        
+        -- Metadata
+        generationtype VARCHAR(50),  -- 'auto', 'manual', 'scheduled'
+        generatedby UUID REFERENCES users(id) ON DELETE SET NULL,
+        
+        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    " "Creating analytics_report table"
+    
+    # 6. Create indexes for analytics_report
+    execute_sql "
+    CREATE INDEX IF NOT EXISTS idx_analytics_report_session ON analytics_report(sessionid);
+    CREATE INDEX IF NOT EXISTS idx_analytics_report_financial ON analytics_report(reportfinancialid);
+    CREATE INDEX IF NOT EXISTS idx_analytics_report_created ON analytics_report(createdat DESC);
+    " "Creating indexes for analytics_report"
+    
+    # 7. Prompt_RatioValues (RAG Context - Citations)
+    execute_sql "
+    CREATE TABLE IF NOT EXISTS prompt_ratiovalues (
+        promptid UUID NOT NULL REFERENCES question_prompt(id) ON DELETE CASCADE,
+        ratiovalueid UUID NOT NULL REFERENCES ratio_value(id) ON DELETE CASCADE,
+        
+        relevancescore DECIMAL(5, 4),  -- 0.0000 to 1.0000
+        
+        PRIMARY KEY (promptid, ratiovalueid)
+    );
+    " "Creating prompt_ratiovalues table"
+    
+    # 8. Create indexes for prompt_ratiovalues
+    execute_sql "
+    CREATE INDEX IF NOT EXISTS idx_prompt_ratio_values_prompt ON prompt_ratiovalues(promptid);
+    CREATE INDEX IF NOT EXISTS idx_prompt_ratio_values_ratio ON prompt_ratiovalues(ratiovalueid);
+    " "Creating indexes for prompt_ratiovalues"
+    
+    # 9. Prompt_Analytics (RAG Context - Citations)
+    execute_sql "
+    CREATE TABLE IF NOT EXISTS prompt_analytics (
+        promptid UUID NOT NULL REFERENCES question_prompt(id) ON DELETE CASCADE,
+        analyticsid UUID NOT NULL REFERENCES analytics_report(id) ON DELETE CASCADE,
+        
+        relevancescore DECIMAL(5, 4),
+        
+        PRIMARY KEY (promptid, analyticsid)
+    );
+    " "Creating prompt_analytics table"
+    
+    # 10. Create indexes for prompt_analytics
+    execute_sql "
+    CREATE INDEX IF NOT EXISTS idx_prompt_analytics_prompt ON prompt_analytics(promptid);
+    CREATE INDEX IF NOT EXISTS idx_prompt_analytics_analytics ON prompt_analytics(analyticsid);
+    " "Creating indexes for prompt_analytics"
+    
+    # 11. Full-text search index for RAG
+    execute_sql "
+    CREATE INDEX IF NOT EXISTS idx_report_financial_content_fts ON report_financial 
+    USING gin(to_tsvector('english', contentraw));
+    " "Creating full-text search index for RAG"
+    
+    log_success "🎉 All missing tables created successfully!"
+    
+    # Verify tables
+    log_info "📊 Verifying database schema..."
+    PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -d "$DB_NAME" -U "$DB_USERNAME" -p "$DB_PORT" -c "
+    SELECT 
+        table_name,
+        (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = t.table_name AND table_schema = 'public') as column_count
+    FROM information_schema.tables t
+    WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+    ORDER BY table_name;
+    "
+    
+    log_success "✅ Database schema verification completed!"
+}
+
+# Execute main function
+main "$@"

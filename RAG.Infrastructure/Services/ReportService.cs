@@ -335,9 +335,9 @@ namespace RAG.Infrastructure.Services
                 throw new FileNotFoundException("The file URL is empty in database.");
             }
 
-            // ✅ FIXED: Return S3 URL for redirect instead of local file path
-            // The controller should redirect to this S3 URL instead of serving the file directly
-            return (report.Fileurl, report.Filename ?? "Report.pdf");
+            // ✅ FIXED: Generate presigned URL for secure S3 access
+            var presignedUrl = await _s3Service.GeneratePresignedUrlAsync(report.Fileurl, 60); // 1 hour expiration
+            return (presignedUrl, report.Filename ?? "Report.pdf");
         }
         public async Task<bool> UpdateVisibilityAsync(Guid reportId, string visibility, Guid userId, string userRole)
         {

@@ -18,6 +18,7 @@ namespace RAG.Infrastructure.Services
         {
             _geminiService = geminiService;
         }
+
         public async Task<ExtractResultDto> ExtractAllAsync(IFormFile file)
         {
             using var stream = file.OpenReadStream();
@@ -26,6 +27,7 @@ namespace RAG.Infrastructure.Services
 
             // BƯỚC 1: DETECT PDF TYPE
             var pdfType = DetectPdfType(pdfDoc);
+            var fileSize = file.Length;
             
             string fullText;
             
@@ -36,7 +38,7 @@ namespace RAG.Infrastructure.Services
             }
             else
             {
-                // BƯỚC 2B: Xử lý PDF ảnh với Gemini Vision
+                // BƯỚC 2B: Xử lý PDF ảnh với Hybrid approach
                 try
                 {
                     // Convert IFormFile to byte array
@@ -44,8 +46,17 @@ namespace RAG.Infrastructure.Services
                     await file.CopyToAsync(memoryStream);
                     var pdfBytes = memoryStream.ToArray();
                     
-                    // Call Gemini Vision
-                    fullText = await _geminiService.ExtractTextFromPdfAsync(pdfBytes);
+                    // ✅ NEW: Hybrid approach based on file size
+                    if (fileSize < 5 * 1024 * 1024) // < 5MB
+                    {
+                        // Small image PDF - use existing Gemini Vision
+                        fullText = await _geminiService.ExtractTextFromPdfAsync(pdfBytes);
+                    }
+                    else
+                    {
+                        // Large image PDF - use chunking approach
+                        fullText = await ProcessLargeImagePdf(pdfBytes, pdfDoc);
+                    }
                     
                     if (string.IsNullOrWhiteSpace(fullText))
                     {
@@ -132,6 +143,112 @@ namespace RAG.Infrastructure.Services
             return text.ToString();
         }
 
+        // ✅ NEW: Process large image PDF by splitting into pages
+        private async Task<string> ProcessLargeImagePdf(byte[] pdfBytes, PdfDocument pdfDoc)
+        {
+            var allText = new StringBuilder();
+            var totalPages = pdfDoc.GetNumberOfPages();
+            var processedPages = 0;
+            var failedPages = 0;
+
+            // Process in batches to avoid overwhelming Gemini API
+            const int batchSize = 2; // ✅ REDUCED: Process 2 pages at a time (was 3)
+            
+            for (int startPage = 1; startPage <= totalPages; startPage += batchSize)
+            {
+                var endPage = Math.Min(startPage + batchSize - 1, totalPages);
+                
+                try
+                {
+                    // Extract pages as separate PDF
+                    var pagesPdfBytes = ExtractPagesAsPdf(pdfBytes, startPage, endPage);
+                    
+                    // ✅ NEW: Add retry logic for timeout issues
+                    var pagesText = await ProcessPagesWithRetry(pagesPdfBytes, startPage, endPage);
+                    
+                    if (!string.IsNullOrWhiteSpace(pagesText))
+                    {
+                        allText.AppendLine($"--- Pages {startPage}-{endPage} ---");
+                        allText.AppendLine(pagesText);
+                        allText.AppendLine();
+                        
+                        processedPages += (endPage - startPage + 1);
+                    }
+                    else
+                    {
+                        failedPages += (endPage - startPage + 1);
+                        allText.AppendLine($"--- Pages {startPage}-{endPage}: No text extracted ---");
+                    }
+                    
+                    // ✅ INCREASED: Add longer delay to avoid rate limiting
+                    await Task.Delay(2000); // 2 seconds instead of 1
+                }
+                catch (Exception ex)
+                {
+                    failedPages += (endPage - startPage + 1);
+                    allText.AppendLine($"--- Pages {startPage}-{endPage}: Error - {ex.Message} ---");
+                }
+            }
+            
+            // Add processing summary
+            var summary = $"Large PDF Processing Summary: {processedPages}/{totalPages} pages processed successfully, {failedPages} failed.";
+            allText.Insert(0, summary + Environment.NewLine + Environment.NewLine);
+            
+            return allText.ToString();
+        }
+
+        // ✅ NEW: Retry logic for Gemini Vision API calls
+        private async Task<string> ProcessPagesWithRetry(byte[] pagesPdfBytes, int startPage, int endPage, int maxRetries = 2)
+        {
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            {
+                try
+                {
+                    var result = await _geminiService.ExtractTextFromPdfAsync(pagesPdfBytes);
+                    return result;
+                }
+                catch (Exception ex) when (ex.Message.Contains("timeout") || ex.Message.Contains("Timeout"))
+                {
+                    if (attempt == maxRetries)
+                    {
+                        return $"[Timeout after {maxRetries} attempts for pages {startPage}-{endPage}]";
+                    }
+                    
+                    // Wait longer before retry
+                    await Task.Delay(5000 * attempt); // 5s, 10s delays
+                }
+                catch (Exception ex)
+                {
+                    return $"[Error processing pages {startPage}-{endPage}: {ex.Message}]";
+                }
+            }
+            
+            return $"[Failed to process pages {startPage}-{endPage} after {maxRetries} attempts]";
+        }
+
+        // ✅ NEW: Extract specific pages from PDF as new PDF bytes
+        private byte[] ExtractPagesAsPdf(byte[] originalPdfBytes, int startPage, int endPage)
+        {
+            using var originalStream = new MemoryStream(originalPdfBytes);
+            using var originalReader = new PdfReader(originalStream);
+            using var originalDoc = new PdfDocument(originalReader);
+            
+            using var outputStream = new MemoryStream();
+            using var outputWriter = new PdfWriter(outputStream);
+            using var outputDoc = new PdfDocument(outputWriter);
+            
+            // Copy specified pages
+            for (int pageNum = startPage; pageNum <= endPage && pageNum <= originalDoc.GetNumberOfPages(); pageNum++)
+            {
+                var page = originalDoc.GetPage(pageNum);
+                page.CopyTo(outputDoc);
+            }
+            
+            outputDoc.Close();
+            return outputStream.ToArray();
+        }
+
+        // ✅ EXISTING: Extract financial metrics from text
         private List<MetricDto> ExtractMetrics(string text)
         {
             var metrics = new List<MetricDto>();

@@ -413,6 +413,8 @@ Temporary Items
 
 # Configuration files with sensitive information
 appsettings*.json
+!appsettings.Development.json.example
+!appsettings.json.example
 
 # Environment variables
 .env
@@ -447,10 +449,15 @@ Migrations/
 .aws/
 
 # Configuration files (keep template, ignore custom configs)
+deployment-config.env
+!deployment-config.env.example
 deployment-config-*.env
-!deployment-config.env
 *-config.env
 *.local.env
+
+# Lambda environment files
+lambda-env.json
+!lambda-env.json.example
 
 # Deployment artifacts and logs
 deployment_checkpoints/
@@ -468,6 +475,7 @@ lambda-deployment.zip
 lambda-*.zip
 test-event.json
 response.json
+trigger-init.json
 lambda-trust-policy.json
 lambda-execution-policy.json
 
@@ -479,6 +487,7 @@ lambda-execution-policy.json
 *.yml
 !appsettings*.yml
 !appsettings*.yaml
+
 # Additional deployment artifacts
 scripts/temp/
 lambda-env-vars.json
@@ -489,3 +498,7 @@ env-vars-fixed.json
 
 # Build artifacts
 /tmp/lambda-build/
+
+# Sensitive test files with real credentials
+scripts/database/test-seed.sh
+scripts/database/create-missing-tables.sh

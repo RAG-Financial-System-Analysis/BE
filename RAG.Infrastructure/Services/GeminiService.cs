@@ -15,6 +15,16 @@ namespace RAG.Infrastructure.Services
         public GeminiService(HttpClient httpClient, IConfiguration configuration)
         {
             _httpClient = httpClient;
+            
+            // ✅ FORCE: Set timeout directly in constructor to override any defaults
+            var geminiTimeoutMinutes = configuration.GetValue<int>("Gemini:TimeoutMinutes", 30);
+            var ragTimeoutMinutes = configuration.GetValue<int>("RAG:RequestTimeoutMinutes", 25);
+            var timeoutMinutes = Math.Max(geminiTimeoutMinutes, ragTimeoutMinutes);
+            
+            _httpClient.Timeout = TimeSpan.FromMinutes(timeoutMinutes);
+            
+            Console.WriteLine($"🔧 FORCE: Gemini HttpClient timeout set to: {timeoutMinutes} minutes ({timeoutMinutes * 60} seconds)");
+            
             // Timeout is configured in DependencyInjection from RAG:RequestTimeoutMinutes
             _apiKey = configuration["Gemini:ApiKey"] 
                 ?? throw new Exception("Gemini API Key not found in appsettings.json");
@@ -98,6 +108,9 @@ namespace RAG.Infrastructure.Services
         // NEW: Extract text from PDF images using Gemini Vision
         public async Task<string> ExtractTextFromPdfAsync(byte[] pdfBytes)
         {
+            Console.WriteLine($"🔍 DEBUG: Starting PDF extraction, file size: {pdfBytes.Length} bytes");
+            Console.WriteLine($"🔍 DEBUG: Current HttpClient timeout: {_httpClient.Timeout.TotalSeconds} seconds");
+            
             var request = new
             {
                 contents = new[]
@@ -125,7 +138,14 @@ namespace RAG.Infrastructure.Services
             
             try
             {
+                Console.WriteLine($"🔍 DEBUG: Sending request to Gemini API...");
+                var startTime = DateTime.Now;
+                
                 var response = await _httpClient.PostAsJsonAsync(url, request);
+                
+                var endTime = DateTime.Now;
+                var duration = endTime - startTime;
+                Console.WriteLine($"🔍 DEBUG: Gemini API response received in {duration.TotalSeconds} seconds");
                 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -139,10 +159,14 @@ namespace RAG.Infrastructure.Services
                     PropertyNameCaseInsensitive = true
                 });
                 
-                return geminiResponse?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text ?? "";
+                var result = geminiResponse?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text ?? "";
+                Console.WriteLine($"✅ DEBUG: PDF extraction completed, result length: {result.Length} characters");
+                
+                return result;
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"❌ DEBUG: PDF extraction failed: {ex.Message}");
                 throw new Exception($"Error calling Gemini Vision API: {ex.Message}", ex);
             }
         }

@@ -21,7 +21,7 @@ namespace RAG.Infrastructure.AWS.Implements
 
         public async Task<string> UploadFileAsync(byte[] fileData, string fileName, string contentType)
         {
-            var key = $"analytics/{Guid.NewGuid()}_{fileName}";
+            var key = $"reports/{Guid.NewGuid()}_{fileName}"; // ✅ FIXED: Use reports folder instead of analytics
 
             using var stream = new MemoryStream(fileData);
             
@@ -43,6 +43,41 @@ namespace RAG.Infrastructure.AWS.Implements
             }
             
             throw new Exception("Error uploading file to S3");
+        }
+
+        public async Task<string> GeneratePresignedUrlAsync(string s3Url, int expirationMinutes = 60)
+        {
+            try
+            {
+                Console.WriteLine($"🔍 DEBUG: Input S3 URL: {s3Url}");
+                
+                // Extract key from S3 URL
+                var uri = new Uri(s3Url);
+                var key = uri.AbsolutePath.TrimStart('/');
+                
+                Console.WriteLine($"🔍 DEBUG: Extracted key: {key}");
+                Console.WriteLine($"🔍 DEBUG: Bucket name: {_bucketName}");
+
+                var request = new GetPreSignedUrlRequest
+                {
+                    BucketName = _bucketName,
+                    Key = key,
+                    Verb = HttpVerb.GET,
+                    Expires = DateTime.UtcNow.AddMinutes(expirationMinutes)
+                };
+
+                var presignedUrl = await _s3Client.GetPreSignedURLAsync(request);
+                
+                Console.WriteLine($"✅ DEBUG: Generated presigned URL: {presignedUrl}");
+                
+                return presignedUrl;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ DEBUG: Error generating presigned URL: {ex.Message}");
+                Console.WriteLine($"❌ DEBUG: Stack trace: {ex.StackTrace}");
+                throw new Exception($"Error generating presigned URL: {ex.Message}", ex);
+            }
         }
     }
 }

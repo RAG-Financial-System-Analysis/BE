@@ -1,0 +1,49 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=your-rds-endpoint.region.rds.amazonaws.com;Port=5432;Database=RAGSystem;Username=postgres;Password=your-db-password"
+  },
+  "AWS": {
+    "Region": "your-aws-region",
+    "UserPoolId": "your-cognito-user-pool-id",
+    "ClientId": "your-cognito-client-id",
+    "AccessKey": "your-aws-access-key",
+    "SecretKey": "your-aws-secret-key",
+    "Authority": "https://cognito-idp.your-region.amazonaws.com/your-user-pool-id",
+    "S3BucketName": "your-s3-bucket-name"
+  },
+  "AdminUser": {
+    "Email": "admin@yourdomain.com",
+    "Password": "YourSecureAdminPassword",
+    "FullName": "System Admin"
+  },
+  "AnalystUser": {
+    "Email": "analyst@yourdomain.com",
+    "Password": "YourSecureAnalystPassword",
+    "FullName": "System Analyst"
+  },
+  "OpenAI": {
+    "ApiKey": "your-openai-api-key",
+    "Model": "gpt-4.1-mini",
+    "MaxToken": 1000
+  },
+  "Gemini": {
+    "ApiKey": "your-gemini-api-key",
+    "Model": "models/gemini-2.5-flash",
+    "BaseUrl": "https://generativelanguage.googleapis.com/v1",
+    "TimeoutMinutes": 30
+  },
+  "RAG": {
+    "RequestTimeoutMinutes": 25,
+    "MaxFileSizeMB": 100
+  },
+  "FileUpload": {
+    "MaxFileSizeMB": 100
+  }
+}
