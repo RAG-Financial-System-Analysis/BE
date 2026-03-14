@@ -116,7 +116,12 @@ app.UseSwaggerUI(c =>
 
 app.UseStaticFiles();
 app.UseCors("AllowAll");
-app.UseHttpsRedirection();
+
+// Only use HTTPS redirect in production
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -226,12 +231,16 @@ public class Startup
 
         app.UseStaticFiles();
         app.UseCors("AllowAll");
-        app.UseHttpsRedirection();
-
-        app.UseAuthentication();
-        app.UseAuthorization();
+        
+        // Only use HTTPS redirect in production
+        if (!env.IsDevelopment())
+        {
+            app.UseHttpsRedirection();
+        }
 
         app.UseRouting();
+        app.UseAuthentication();
+        app.UseAuthorization();
         app.UseEndpoints(endpoints =>
         {
             endpoints.MapControllers();
