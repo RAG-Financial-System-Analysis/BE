@@ -2,7 +2,9 @@
 using Microsoft.AspNetCore.Mvc;
 using RAG.Application.Interfaces;
 using RAG.Domain.DTOs.Report;
+using RAG.Domain.DTOs.Job;
 using RAG.Domain.Enum;
+using RAG.Infrastructure.Services;
 using System.Security.Claims;
 
 namespace RAG.APIs.Controllers
@@ -12,10 +14,16 @@ namespace RAG.APIs.Controllers
     public class ReportsController : ControllerBase
     {
         private readonly IReportService _reportService;
+        private readonly IJobService _jobService;
+        private readonly IS3Service _s3Service;
+        private readonly IBackgroundTaskQueue _taskQueue;
 
-        public ReportsController(IReportService reportService)
+        public ReportsController(IReportService reportService, IJobService jobService, IS3Service s3Service, IBackgroundTaskQueue taskQueue)
         {
             _reportService = reportService;
+            _jobService = jobService;
+            _s3Service = s3Service;
+            _taskQueue = taskQueue;
         }
 
         [HttpPost("upload")]
@@ -49,6 +57,83 @@ namespace RAG.APIs.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { Message = "An error occurred while uploading the report.", Details = ex.Message });
+            }
+        }
+
+        [HttpPost("upload-async")]
+        [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.Analyst}")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UploadReportAsync([FromForm] UploadReportRequest request)
+        {
+            try
+            {
+                var userIdClaim = User.FindFirst("internal_user_id")?.Value;
+                if (string.IsNullOrEmpty(userIdClaim))
+                {
+                    return Unauthorized("User is not authenticated or Sub is missing.");
+                }
+                if (!Guid.TryParse(userIdClaim, out Guid internalUserId))
+                {
+                    return BadRequest("User id claim is not a valid GUID. Have you configured ClaimsTransformation?");
+                }
+
+                // Quick validations only
+                if (request.File == null || request.File.Length == 0)
+                {
+                    return BadRequest(new { Message = "File cannot be empty." });
+                }
+
+                if (request.File.ContentType != "application/pdf")
+                {
+                    return BadRequest(new { Message = "Only PDF files are allowed." });
+                }
+
+                // Upload file to S3 first (for job processing)
+                byte[] fileBytes;
+                using (var memoryStream = new MemoryStream())
+                {
+                    await request.File.CopyToAsync(memoryStream);
+                    fileBytes = memoryStream.ToArray();
+                }
+
+                var s3Key = await _s3Service.UploadJobFileAsync(fileBytes, request.File.FileName, "application/pdf");
+
+                // Create job with input data
+                var inputData = new
+                {
+                    S3Key = s3Key,
+                    FileName = request.File.FileName,
+                    CompanyId = request.CompanyId,
+                    CategoryId = request.CategoryId,
+                    Year = request.Year,
+                    Period = request.Period,
+                    Visibility = request.Visibility ?? "private"
+                };
+
+                var jobId = await _jobService.CreateJobAsync("upload", internalUserId, inputData);
+
+                // Queue background job processing
+                await _taskQueue.QueueBackgroundWorkItemAsync(async token =>
+                {
+                    using var scope = HttpContext.RequestServices.CreateScope();
+                    var backgroundService = scope.ServiceProvider.GetRequiredService<BackgroundJobService>();
+                    await backgroundService.ProcessUploadJobAsync(jobId);
+                });
+
+                return Ok(new AsyncUploadResponse
+                {
+                    JobId = jobId,
+                    Status = "pending",
+                    Message = "Upload started. Use jobId to check progress."
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred while starting the upload.", Details = ex.Message });
             }
         }
         [HttpGet("my-reports")]
@@ -233,7 +318,7 @@ namespace RAG.APIs.Controllers
         }
         [HttpGet("search")]
         [Authorize(Roles = $"{SystemRoles.Admin},{SystemRoles.Analyst}")]
-        public async Task<IActionResult> SearchReports([FromQuery] string query, [FromQuery] Guid? companyId, [FromQuery] int? year, [FromQuery] string? period)
+        public async Task<IActionResult> SearchReports([FromQuery] string? query, [FromQuery] Guid? companyId, [FromQuery] int? year, [FromQuery] string? period)
         {
             try
             {
@@ -245,12 +330,7 @@ namespace RAG.APIs.Controllers
                     return Unauthorized("User is not authenticated.");
                 }
 
-                if (string.IsNullOrWhiteSpace(query))
-                {
-                    return BadRequest("Query parameter is required.");
-                }
-
-                var response = await _reportService.SearchReportsAsync(query, companyId, year, period, internalUserId, roleClaim ?? "");
+                var response = await _reportService.SearchReportsAsync(query ?? "", companyId, year, period, internalUserId, roleClaim ?? "");
                 return Ok(response);
             }
             catch (Exception ex)

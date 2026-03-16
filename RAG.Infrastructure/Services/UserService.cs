@@ -96,8 +96,15 @@ namespace RAG.Infrastructure.Services
                 throw new Exception("User not found");
             }
 
+            // Find role by name
+            var role = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Name == request.Role);
+            if (role == null)
+            {
+                throw new Exception($"Role '{request.Role}' not found");
+            }
+
             user.Fullname = request.FullName;
-            user.Roleid = request.RoleId;
+            user.Roleid = role.Id; // Use the found role's ID
             user.Isactive = request.IsActive;
 
             _dbContext.Users.Update(user);

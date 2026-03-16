@@ -4,6 +4,8 @@ using Microsoft.Extensions.Configuration;
 using RAG.Application.Interfaces;
 using System;
 using System.IO;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace RAG.Infrastructure.AWS.Implements
@@ -45,6 +47,32 @@ namespace RAG.Infrastructure.AWS.Implements
             throw new Exception("Error uploading file to S3");
         }
 
+        // NEW: Upload file for job processing (returns key, not URL)
+        public async Task<string> UploadJobFileAsync(byte[] fileData, string fileName, string contentType)
+        {
+            var key = $"jobs/{Guid.NewGuid()}/input.pdf";
+
+            using var stream = new MemoryStream(fileData);
+            
+            var putRequest = new PutObjectRequest
+            {
+                BucketName = _bucketName,
+                Key = key,
+                InputStream = stream,
+                ContentType = contentType
+            };
+
+            var response = await _s3Client.PutObjectAsync(putRequest);
+            
+            if (response.HttpStatusCode == System.Net.HttpStatusCode.OK)
+            {
+                // Return key only (not full URL) for job processing
+                return key;
+            }
+            
+            throw new Exception("Error uploading job file to S3");
+        }
+
         public async Task<string> GeneratePresignedUrlAsync(string s3Url, int expirationMinutes = 60)
         {
             try
@@ -77,6 +105,89 @@ namespace RAG.Infrastructure.AWS.Implements
                 Console.WriteLine($"❌ DEBUG: Error generating presigned URL: {ex.Message}");
                 Console.WriteLine($"❌ DEBUG: Stack trace: {ex.StackTrace}");
                 throw new Exception($"Error generating presigned URL: {ex.Message}", ex);
+            }
+        }
+
+        // NEW: JSON operations for job system
+        public async Task PutJsonAsync<T>(string key, T data)
+        {
+            var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+            var bytes = Encoding.UTF8.GetBytes(json);
+
+            using var stream = new MemoryStream(bytes);
+            
+            var putRequest = new PutObjectRequest
+            {
+                BucketName = _bucketName,
+                Key = key,
+                InputStream = stream,
+                ContentType = "application/json"
+            };
+
+            var response = await _s3Client.PutObjectAsync(putRequest);
+            
+            if (response.HttpStatusCode != System.Net.HttpStatusCode.OK)
+            {
+                throw new Exception($"Error uploading JSON to S3: {response.HttpStatusCode}");
+            }
+        }
+
+        public async Task<T?> GetJsonAsync<T>(string key)
+        {
+            try
+            {
+                var getRequest = new GetObjectRequest
+                {
+                    BucketName = _bucketName,
+                    Key = key
+                };
+
+                using var response = await _s3Client.GetObjectAsync(getRequest);
+                using var reader = new StreamReader(response.ResponseStream);
+                
+                var json = await reader.ReadToEndAsync();
+                return JsonSerializer.Deserialize<T>(json);
+            }
+            catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                throw new FileNotFoundException($"S3 object not found: {key}");
+            }
+        }
+
+        public async Task<byte[]> DownloadFileAsync(string s3UrlOrKey)
+        {
+            try
+            {
+                string key;
+                
+                // Check if input is a full S3 URL or just a key
+                if (s3UrlOrKey.StartsWith("https://"))
+                {
+                    // Extract key from S3 URL
+                    var uri = new Uri(s3UrlOrKey);
+                    key = uri.AbsolutePath.TrimStart('/');
+                }
+                else
+                {
+                    // It's already a key
+                    key = s3UrlOrKey;
+                }
+
+                var getRequest = new GetObjectRequest
+                {
+                    BucketName = _bucketName,
+                    Key = key
+                };
+
+                using var response = await _s3Client.GetObjectAsync(getRequest);
+                using var memoryStream = new MemoryStream();
+                
+                await response.ResponseStream.CopyToAsync(memoryStream);
+                return memoryStream.ToArray();
+            }
+            catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                throw new FileNotFoundException($"S3 file not found: {s3UrlOrKey}");
             }
         }
     }

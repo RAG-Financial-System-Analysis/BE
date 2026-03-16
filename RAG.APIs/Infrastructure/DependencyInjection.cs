@@ -55,6 +55,16 @@ namespace RAG.APIs.Infrastructure
             services.AddScoped<IChatService, ChatService>();
             services.AddScoped<IRagService, RagService>();
             
+            // NEW: Job Services
+            services.AddScoped<IJobService, S3JobService>();
+            services.AddScoped<BackgroundJobService>();
+            
+            // NEW: Background Task Queue
+            services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
+            services.AddHostedService<QueuedHostedService>();
+            services.AddHostedService<JobCleanupService>();
+            services.AddHostedService<JobRecoveryService>();
+            
             // NEW: Gemini Service with configurable timeout
             services.AddHttpClient<IGeminiService, GeminiService>(client =>
             {
