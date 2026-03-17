@@ -8,7 +8,7 @@ namespace RAG.Application.Interfaces.Analaytic
     {
         Task<GetAnalyticTypeResponse> GetAnalyticTypesAsync();
         Task<GenerateAnalyticsReportResponse> GenerateAnalyticsReportAsync(GenerateAnalyticsReportRequest request, Guid userId);
-        Task<GetAnalyticsReportsResponse> GetAnalyticsReportsAsync(Guid? sessionId, int page, int pageSize);
+        Task<GetAnalyticsReportsResponse> GetAnalyticsReportsAsync(Guid? sessionId, Guid userId, int page, int pageSize);
         Task<GetAnalyticsReportByIdResponse> GetAnalyticsReportByIdAsync(Guid id);
         Task<(byte[] FileContent, string FileName, string ContentType)> DownloadAnalyticsFileAsync(string fileUrl);
     }

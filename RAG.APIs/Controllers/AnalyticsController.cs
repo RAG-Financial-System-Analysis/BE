@@ -130,7 +130,13 @@ namespace RAG.APIs.Controllers
         {
             try
             {
-                var response = await _analyticsService.GetAnalyticsReportsAsync(sessionId, page, pageSize);
+                var userIdString = User.FindFirst("internal_user_id")?.Value;
+                if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out Guid userId))
+                {
+                    return Unauthorized(new { Message = "Invalid or missing user ID in token." });
+                }
+
+                var response = await _analyticsService.GetAnalyticsReportsAsync(sessionId, userId, page, pageSize);
                 return Ok(response);
             }
             catch (Exception ex)
